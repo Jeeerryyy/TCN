@@ -59,25 +59,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncBillsFromCloud = () => {
       dbService.fetchBills().then((remoteBills) => {
         if (remoteBills !== null) {
-          setBills((localBills) => {
-            // Merge remote bills with any local bills not yet in remote
-            const remoteMap = new Map(remoteBills.map((b) => [b.id, b]));
-            const missingInRemote = localBills.filter((b) => !remoteMap.has(b.id));
-
-            // Sync any missing local bills to Supabase in background
-            if (missingInRemote.length > 0) {
-              missingInRemote.forEach((b) => dbService.syncBill(b));
-            }
-
-            // Return combined list sorted by settledAt/createdAt desc
-            const combined = [...remoteBills, ...missingInRemote];
-            combined.sort(
-              (a, b) =>
-                new Date(b.settledAt || b.createdAt).getTime() -
-                new Date(a.settledAt || a.createdAt).getTime()
-            );
-            return combined;
-          });
+          setBills(remoteBills);
+          saveToStorage('bills', remoteBills);
         }
       });
     };
@@ -93,18 +76,27 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (action === 'DELETE') {
         if (bill.id === '__ALL__') {
           setBills([]);
+          clearBillsStorage();
+          saveToStorage('bills', []);
         } else {
-          setBills((prev) => prev.filter((b) => b.id !== bill.id));
+          setBills((prev) => {
+            const next = prev.filter((b) => b.id !== bill.id);
+            saveToStorage('bills', next);
+            return next;
+          });
         }
       } else {
         setBills((prev) => {
           const idx = prev.findIndex((b) => b.id === bill.id);
+          let next: Bill[];
           if (idx > -1) {
-            const next = [...prev];
+            next = [...prev];
             next[idx] = bill;
-            return next;
+          } else {
+            next = [bill, ...prev];
           }
-          return [bill, ...prev];
+          saveToStorage('bills', next);
+          return next;
         });
       }
     });
@@ -340,13 +332,18 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const deleteBill = async (billId: string) => {
-    setBills((prev) => prev.filter((b) => b.id !== billId));
+    setBills((prev) => {
+      const next = prev.filter((b) => b.id !== billId);
+      saveToStorage('bills', next);
+      return next;
+    });
     await dbService.deleteBillRemote(billId);
   };
 
   const clearAllBills = async () => {
     setBills([]);
     clearBillsStorage();
+    saveToStorage('bills', []);
     await dbService.clearAllBillsRemote();
   };
 
