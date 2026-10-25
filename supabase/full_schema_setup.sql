@@ -14,21 +14,25 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ====================================================================
--- 2. GAME TABLES TABLE
+-- 2. GAME TABLES TABLE (Venue Floor Management)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.game_tables (
   id text PRIMARY KEY,
   name text NOT NULL,
+  short_code text,
   type text NOT NULL,
-  status text NOT NULL DEFAULT 'free',
-  rate_per_hour numeric(10,2) NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'available',
+  rate_per_hour numeric(10,2) NOT NULL DEFAULT 240,
+  min_minutes numeric DEFAULT 60,
   size text,
   cloth_color text,
+  current_session_id text,
+  location_zone text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- ====================================================================
--- 3. GAME SESSIONS TABLE
+-- 3. GAME SESSIONS TABLE (Live Session Timers & Players)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.game_sessions (
   id text PRIMARY KEY,
@@ -44,13 +48,15 @@ CREATE TABLE IF NOT EXISTS public.game_sessions (
   customer_phone text,
   customer_id text,
   players_count int DEFAULT 1,
+  player_names text[] DEFAULT '{}'::text[],
   status text DEFAULT 'active',
   notes text,
+  linked_cafe_order_ids text[] DEFAULT '{}'::text[],
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- ====================================================================
--- 4. CUSTOMERS TABLE (Sanitized & Clean)
+-- 4. CUSTOMERS TABLE (Sanitized & Clean CRM)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.customers (
   id text PRIMARY KEY,
@@ -69,7 +75,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON public.customers(phone);
 
 -- ====================================================================
--- 5. BOOKINGS & RESERVATIONS TABLE (Sanitized & Clean)
+-- 5. BOOKINGS & RESERVATIONS TABLE (Sanitized & Clean Schedule)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.bookings (
   id text PRIMARY KEY,
@@ -90,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 CREATE INDEX IF NOT EXISTS idx_bookings_date ON public.bookings(booking_date);
 
 -- ====================================================================
--- 6. BILLS & INVOICES TABLE
+-- 6. BILLS & INVOICES TABLE (POS Settlements & Split Invoices)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.bills (
   id text PRIMARY KEY,
@@ -100,6 +106,7 @@ CREATE TABLE IF NOT EXISTS public.bills (
   table_name text,
   customer_name text,
   customer_phone text,
+  items jsonb DEFAULT '[]'::jsonb,
   table_charge numeric(10,2) DEFAULT 0,
   cafe_charge numeric(10,2) DEFAULT 0,
   subtotal numeric(10,2) DEFAULT 0,
@@ -108,14 +115,14 @@ CREATE TABLE IF NOT EXISTS public.bills (
   tax_gst_amount numeric(10,2) DEFAULT 0,
   final_total numeric(10,2) DEFAULT 0,
   payment_method text DEFAULT 'cash',
-  status text DEFAULT 'paid',
+  status text DEFAULT 'settled',
   created_at timestamptz NOT NULL DEFAULT now(),
   settled_at timestamptz,
   settled_by text
 );
 
 -- ====================================================================
--- 7. CAFE ORDERS TABLE
+-- 7. CAFE ORDERS TABLE (Live KOT & Orders)
 -- ====================================================================
 CREATE TABLE IF NOT EXISTS public.orders (
   id text PRIMARY KEY,
@@ -126,13 +133,13 @@ CREATE TABLE IF NOT EXISTS public.orders (
   customer_name text,
   items jsonb DEFAULT '[]'::jsonb,
   subtotal numeric(10,2) DEFAULT 0,
-  status text DEFAULT 'preparing',
+  status text DEFAULT 'pending',
   is_billed boolean DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- ====================================================================
--- 8. ROW LEVEL SECURITY (RLS) & PUBLIC ACCESS POLICIES
+-- 8. ROW LEVEL SECURITY (RLS) & MULTI-DEVICE ACCESS POLICIES
 -- ====================================================================
 ALTER TABLE public.game_tables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_sessions ENABLE ROW LEVEL SECURITY;
@@ -141,7 +148,7 @@ ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- Allow public & authenticated users to perform operations
+-- Allow public and authenticated users full realtime access
 DROP POLICY IF EXISTS "Public full access game_tables" ON public.game_tables;
 CREATE POLICY "Public full access game_tables" ON public.game_tables FOR ALL TO public USING (true) WITH CHECK (true);
 
@@ -160,5 +167,5 @@ CREATE POLICY "Public full access bills" ON public.bills FOR ALL TO public USING
 DROP POLICY IF EXISTS "Public full access orders" ON public.orders;
 CREATE POLICY "Public full access orders" ON public.orders FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Enable Realtime for dynamic live synchronization
+-- Enable Realtime for dynamic live synchronization between Staff and Admin
 ALTER PUBLICATION supabase_realtime ADD TABLE public.game_tables, public.game_sessions, public.bookings, public.bills, public.customers, public.orders;

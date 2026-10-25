@@ -1,11 +1,12 @@
 /* Brex Design System – Fintech Modern, High-Contrast, Inter Typography */
 
 import React, { useState, useEffect } from 'react';
-import { Clock, ShieldCheck, UserCheck, Lock, Menu, X } from 'lucide-react';
+import { Clock, ShieldCheck, UserCheck, Lock, Menu, X, RefreshCw } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { useTables } from '../../context/TableContext';
 import { useCafe } from '../../context/CafeContext';
 import { useAuth } from '../../context/AuthContext';
+import { dbService, SyncStatus } from '../../services/db';
 
 interface SystemHeaderProps {
   onToggleMobileMenu?: () => void;
@@ -20,6 +21,33 @@ export const SystemHeader: React.FC<SystemHeaderProps> = ({
   const { activeKitchenOrders } = useCafe();
   const { currentUser, role, isAdmin, logout } = useAuth();
   const [timeString, setTimeString] = useState('');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => dbService.getSyncStatus());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const unsub = dbService.onStatusChange((status) => {
+      setSyncStatus(status);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleManualSync = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        dbService.fetchTables(),
+        dbService.fetchSessions(),
+        dbService.fetchBookings(),
+        dbService.fetchCustomers(),
+        dbService.fetchOrders(),
+        dbService.fetchBills(),
+      ]);
+    } catch (e) {
+      console.warn('[Sync] Manual refresh error:', e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   // Clock updates every second
   useEffect(() => {
@@ -77,8 +105,54 @@ export const SystemHeader: React.FC<SystemHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Live Clock, Authenticated Operator Badge, and Lock Terminal Action */}
-      <div className="flex items-center gap-4">
+      {/* Right: Cloud Sync Status, Live Clock, Authenticated Operator Badge, and Lock Terminal Action */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Live Multi-Terminal Cloud Sync Indicator */}
+        <div
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] border text-[11px] font-medium transition-colors ${
+            syncStatus === 'connected'
+              ? 'bg-[#D1F4D2]/60 border-[#0D9926]/30 text-[#0D9926]'
+              : syncStatus === 'syncing'
+              ? 'bg-[#D5E8FB]/60 border-[#006EF5]/30 text-[#006EF5]'
+              : 'bg-[#FFA500]/10 border-[#FFA500]/30 text-[#FF5900]'
+          }`}
+          title={
+            syncStatus === 'connected'
+              ? 'Supabase live multi-terminal sync active (Staff & Admin synced)'
+              : syncStatus === 'syncing'
+              ? 'Syncing with cloud database...'
+              : 'Operating in local offline cache mode'
+          }
+        >
+          <div
+            className={`w-2 h-2 rounded-full ${
+              syncStatus === 'connected'
+                ? 'bg-[#0D9926] animate-pulse'
+                : syncStatus === 'syncing'
+                ? 'bg-[#006EF5] animate-ping'
+                : 'bg-[#FFA500]'
+            }`}
+          />
+          <span className="hidden sm:inline">
+            {syncStatus === 'connected'
+              ? 'Cloud Synced'
+              : syncStatus === 'syncing'
+              ? 'Syncing...'
+              : 'Offline Cache'}
+          </span>
+        </div>
+
+        {/* Manual Cloud Refresh Button */}
+        <button
+          type="button"
+          onClick={handleManualSync}
+          disabled={isRefreshing}
+          title="Force refresh & sync with cloud"
+          className="h-[32px] w-[32px] rounded-[6px] bg-[#FFFFFF] hover:bg-[#15191E]/[0.05] border border-[#B9BBC6] text-[#60646C] hover:text-[#15191E] flex items-center justify-center transition-colors active:scale-95"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-[#FF5900]' : ''}`} />
+        </button>
+
         {/* Live Clock */}
         <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-[#15191E] bg-[#F3F3F7] border border-[#B9BBC6] px-3 py-1.5 rounded-[6px]">
           <Clock className="w-3.5 h-3.5 text-[#FF5900]" />

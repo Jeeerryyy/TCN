@@ -53,6 +53,32 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeBillModal, setActiveBillModal] = useState<Bill | null>(null);
 
   useEffect(() => {
+    // Fetch initial bills from cloud on mount
+    dbService.fetchBills().then((remoteBills) => {
+      if (remoteBills && remoteBills.length > 0) {
+        setBills(remoteBills);
+      }
+    });
+
+    // Listen to live bill settlements (Staff POS settlements streaming to Admin)
+    const unsubBill = dbService.onBillChange((bill) => {
+      setBills((prev) => {
+        const idx = prev.findIndex((b) => b.id === bill.id);
+        if (idx > -1) {
+          const next = [...prev];
+          next[idx] = bill;
+          return next;
+        }
+        return [bill, ...prev];
+      });
+    });
+
+    return () => {
+      unsubBill();
+    };
+  }, []);
+
+  useEffect(() => {
     saveToStorage('bills', bills);
   }, [bills]);
 

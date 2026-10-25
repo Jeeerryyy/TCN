@@ -42,6 +42,36 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    // Fetch initial customers from cloud on mount
+    dbService.fetchCustomers().then((remoteCustomers) => {
+      if (remoteCustomers) {
+        setCustomers(remoteCustomers);
+      }
+    });
+
+    // Listen to live customer changes
+    const unsubCustomer = dbService.onCustomerChange((cust, action) => {
+      if (action === 'DELETE') {
+        setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
+      } else {
+        setCustomers((prev) => {
+          const idx = prev.findIndex((c) => c.id === cust.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...cust };
+            return next;
+          }
+          return [cust, ...prev];
+        });
+      }
+    });
+
+    return () => {
+      unsubCustomer();
+    };
+  }, []);
+
+  useEffect(() => {
     saveToStorage('customers', customers);
   }, [customers]);
 
@@ -162,6 +192,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setCustomers([]);
     setWalletTransactions([]);
     clearCustomersStorage();
+    dbService.clearAllCustomersRemote();
   };
 
   return (

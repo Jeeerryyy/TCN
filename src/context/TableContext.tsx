@@ -65,6 +65,89 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => clearInterval(timer);
   }, []);
 
+  // Real-time synchronization between Staff and Admin terminals
+  useEffect(() => {
+    // Initialize realtime WebSocket listener
+    const unsubRealtime = dbService.initRealtimeSubscription();
+
+    // Fetch initial data from cloud on mount
+    dbService.fetchTables().then((remoteTables) => {
+      if (remoteTables && remoteTables.length > 0) {
+        setTables(remoteTables);
+      }
+    });
+
+    dbService.fetchSessions().then((remoteSessions) => {
+      if (remoteSessions) {
+        setSessions(remoteSessions);
+      }
+    });
+
+    dbService.fetchBookings().then((remoteBookings) => {
+      if (remoteBookings) {
+        setBookings(remoteBookings);
+      }
+    });
+
+    // Listen to live table changes
+    const unsubTable = dbService.onTableChange((tbl, action) => {
+      if (action === 'DELETE') {
+        setTables((prev) => prev.filter((t) => t.id !== tbl.id));
+      } else {
+        setTables((prev) => {
+          const idx = prev.findIndex((t) => t.id === tbl.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...tbl };
+            return next;
+          }
+          return [...prev, tbl];
+        });
+      }
+    });
+
+    // Listen to live session changes (starts, pauses, resumes, settlements)
+    const unsubSession = dbService.onSessionChange((sess, action) => {
+      if (action === 'DELETE') {
+        setSessions((prev) => prev.filter((s) => s.id !== sess.id));
+      } else {
+        setSessions((prev) => {
+          const idx = prev.findIndex((s) => s.id === sess.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = sess;
+            return next;
+          }
+          return [sess, ...prev];
+        });
+      }
+    });
+
+    // Listen to live booking changes
+    const unsubBooking = dbService.onBookingChange((bkg, action) => {
+      if (action === 'DELETE') {
+        setBookings((prev) => prev.filter((b) => b.id !== bkg.id));
+      } else {
+        setBookings((prev) => {
+          const idx = prev.findIndex((b) => b.id === bkg.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = bkg;
+            return next;
+          }
+          return [bkg, ...prev];
+        });
+      }
+    });
+
+    return () => {
+      unsubRealtime();
+      unsubTable();
+      unsubSession();
+      unsubBooking();
+    };
+  }, []);
+
   // Sync to local storage
   useEffect(() => {
     saveToStorage('tables', tables);
@@ -301,6 +384,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     }
     setTables((prev) => prev.filter((t) => t.id !== tableId));
+    dbService.deleteTableRemote(tableId);
     return { success: true };
   };
 
@@ -366,6 +450,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearAllBookings = () => {
     setBookings([]);
     clearBookingsStorage();
+    dbService.clearAllBookingsRemote();
   };
 
   return (
