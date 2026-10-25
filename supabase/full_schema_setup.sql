@@ -167,5 +167,14 @@ CREATE POLICY "Public full access bills" ON public.bills FOR ALL TO public USING
 DROP POLICY IF EXISTS "Public full access orders" ON public.orders;
 CREATE POLICY "Public full access orders" ON public.orders FOR ALL TO public USING (true) WITH CHECK (true);
 
--- Enable Realtime for dynamic live synchronization between Staff and Admin
-ALTER PUBLICATION supabase_realtime ADD TABLE public.game_tables, public.game_sessions, public.bookings, public.bills, public.customers, public.orders;
+-- Enable Realtime for dynamic live synchronization between Staff and Admin (idempotent)
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.game_tables, public.game_sessions, public.bookings, public.bills, public.customers, public.orders;
+  EXCEPTION 
+    WHEN duplicate_object THEN NULL;
+    WHEN others THEN NULL;
+  END;
+END $$;
+
