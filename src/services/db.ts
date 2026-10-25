@@ -4,7 +4,7 @@ import { getSupabaseClient } from './supabaseClient';
 import { Table, TableSession, TableBooking } from '../types/table.types';
 import { Customer } from '../types/customer.types';
 import { Bill } from '../types/billing.types';
-import { CafeOrder } from '../types/cafe.types';
+import { CafeOrder, MenuItem } from '../types/cafe.types';
 import { INITIAL_TABLES } from '../data/initialTables';
 
 export type SyncAction = 'INSERT' | 'UPDATE' | 'DELETE';
@@ -20,6 +20,7 @@ const bookingListeners = new Set<Listener<TableBooking>>();
 const customerListeners = new Set<Listener<Customer>>();
 const billListeners = new Set<Listener<Bill>>();
 const orderListeners = new Set<Listener<CafeOrder>>();
+const menuListeners = new Set<(items: MenuItem[]) => void>();
 const statusListeners = new Set<StatusListener>();
 
 let currentSyncStatus: SyncStatus = 'offline';
@@ -40,6 +41,7 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
       if (type === 'customer') customerListeners.forEach((l) => l(data, action));
       if (type === 'bill') billListeners.forEach((l) => l(data, action));
       if (type === 'order') orderListeners.forEach((l) => l(data, action));
+      if (type === 'menu') menuListeners.forEach((l) => l(data));
     };
   } catch (e) {
     console.warn('[TCN Realtime] Local broadcast channel not available:', e);
@@ -307,18 +309,6 @@ export const dbService = {
 
       const fetchedTables = data.map(mapRowToTable);
 
-      // Verify that all 6 standard venue tables (3 Pool, 3 Snooker) exist
-      const existingIds = new Set(fetchedTables.map((t) => t.id));
-      const missingTables = INITIAL_TABLES.filter((t) => !existingIds.has(t.id));
-
-      if (missingTables.length > 0) {
-        console.log(`[DB Sync] ${missingTables.length} standard tables missing in cloud. Seeding missing tables...`);
-        for (const tbl of missingTables) {
-          await this.syncTable(tbl);
-          fetchedTables.push(tbl);
-        }
-      }
-
       // Sort tables in canonical venue order: Pool 1-3, Snooker 1-3
       const orderMap: Record<string, number> = {
         tbl_p1: 1,
@@ -410,12 +400,94 @@ export const dbService = {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .neq('id', '__TCN_MENU_CONFIG__')
         .order('created_at', { ascending: false });
 
       if (error) return null;
       return (data || []).map(mapRowToOrder);
     } catch {
       return null;
+    }
+  },
+
+  async fetchMenu(): Promise<MenuItem[] | null> {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+    try {
+      // 1. Try public.menu_items if it exists
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        return data.map((r: any) => ({
+          id: String(r.id),
+          name: String(r.name),
+          category: r.category || 'beverages',
+          price: Number(r.price) || 0,
+          description: r.description || undefined,
+          isVegetarian: r.is_vegetarian !== false,
+          isAvailable: r.is_available !== false,
+          prepTimeMinutes: Number(r.prep_time_minutes) || 1,
+        }));
+      }
+
+      // 2. Seamless live fallback to synchronized __TCN_MENU_CONFIG__ record
+      const { data: cfgData, error: cfgError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', '__TCN_MENU_CONFIG__')
+        .maybeSingle();
+
+      if (!cfgError && cfgData && cfgData.items) {
+        const parsed = typeof cfgData.items === 'string' ? JSON.parse(cfgData.items) : cfgData.items;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  async syncMenu(items: MenuItem[]): Promise<void> {
+    broadcastLocally('menu', items, 'UPDATE');
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    try {
+      // 1. Save to __TCN_MENU_CONFIG__ row in orders (100% live on all devices right now)
+      await supabase.from('orders').upsert({
+        id: '__TCN_MENU_CONFIG__',
+        order_number: 'CONFIG-MENU',
+        destination: 'system_config',
+        customer_name: 'System Menu Configuration',
+        items: JSON.stringify(items),
+        subtotal: 0,
+        status: 'system',
+        is_billed: true,
+      });
+
+      // 2. Also try menu_items table if it has been created
+      try {
+        for (const item of items) {
+          await supabase.from('menu_items').upsert({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            price: item.price,
+            description: item.description || null,
+            is_vegetarian: item.isVegetarian,
+            is_available: item.isAvailable,
+            prep_time_minutes: item.prepTimeMinutes || 1,
+          });
+        }
+      } catch {
+        // Ignored if table not created yet
+      }
+    } catch (e) {
+      console.warn('[DB Sync] Menu sync deferred:', e);
     }
   },
 
@@ -675,6 +747,17 @@ export const dbService = {
     }
   },
 
+  async deleteOrderRemote(orderId: string): Promise<void> {
+    broadcastLocally('order', { id: orderId } as CafeOrder, 'DELETE');
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    try {
+      await supabase.from('orders').delete().eq('id', orderId);
+    } catch (e) {
+      console.warn('[DB Sync] Order delete deferred:', e);
+    }
+  },
+
   // --- REALTIME SUBSCRIPTIONS (Cross-Device WebSockets) ---
   initRealtimeSubscription(): () => void {
     const supabase = getSupabaseClient();
@@ -741,8 +824,18 @@ export const dbService = {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'orders' },
           (payload) => {
+            const raw: any = payload.new || payload.old;
+            if (raw && raw.id === '__TCN_MENU_CONFIG__') {
+              try {
+                const items = typeof raw.items === 'string' ? JSON.parse(raw.items) : raw.items;
+                menuListeners.forEach((l) => l(items));
+              } catch (e) {
+                console.warn('[DB Sync] Realtime menu parse error:', e);
+              }
+              return;
+            }
             const action = payload.eventType as SyncAction;
-            const order = mapRowToOrder(payload.new || payload.old);
+            const order = mapRowToOrder(raw);
             orderListeners.forEach((l) => l(order, action));
           }
         )
@@ -795,6 +888,11 @@ export const dbService = {
   onOrderChange(cb: Listener<CafeOrder>): () => void {
     orderListeners.add(cb);
     return () => orderListeners.delete(cb);
+  },
+
+  onMenuChange(cb: (menu: MenuItem[]) => void): () => void {
+    menuListeners.add(cb);
+    return () => menuListeners.delete(cb);
   },
 
   onStatusChange(cb: StatusListener): () => void {

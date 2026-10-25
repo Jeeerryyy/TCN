@@ -25,6 +25,7 @@ interface CustomerContextType {
   topUpWallet: (customerId: string, amount: number, notes?: string) => void;
   deductWallet: (customerId: string, amount: number, billId: string) => boolean;
   clearAllCustomers: () => void;
+  deleteCustomer: (id: string) => Promise<void>;
   walletTransactions: WalletTransaction[];
 }
 
@@ -42,31 +43,47 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    // Fetch initial customers from cloud on mount
-    dbService.fetchCustomers().then((remoteCustomers) => {
-      if (remoteCustomers) {
-        setCustomers(remoteCustomers);
-      }
-    });
+    const syncCustomersFromCloud = () => {
+      dbService.fetchCustomers().then((remoteCustomers) => {
+        if (remoteCustomers) {
+          setCustomers(remoteCustomers);
+          saveToStorage('customers', remoteCustomers);
+        }
+      });
+    };
+
+    // Initial fetch from cloud on mount
+    syncCustomersFromCloud();
+
+    // Background cloud polling every 4 seconds to guarantee multi-device live sync
+    const pollTimer = setInterval(syncCustomersFromCloud, 4000);
 
     // Listen to live customer changes
     const unsubCustomer = dbService.onCustomerChange((cust, action) => {
       if (action === 'DELETE') {
-        setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
+        setCustomers((prev) => {
+          const next = prev.filter((c) => c.id !== cust.id);
+          saveToStorage('customers', next);
+          return next;
+        });
       } else {
         setCustomers((prev) => {
           const idx = prev.findIndex((c) => c.id === cust.id);
+          let next: Customer[];
           if (idx > -1) {
-            const next = [...prev];
+            next = [...prev];
             next[idx] = { ...next[idx], ...cust };
-            return next;
+          } else {
+            next = [cust, ...prev];
           }
-          return [cust, ...prev];
+          saveToStorage('customers', next);
+          return next;
         });
       }
     });
 
     return () => {
+      clearInterval(pollTimer);
       unsubCustomer();
     };
   }, []);
@@ -188,6 +205,15 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return true;
   };
 
+  const deleteCustomer = async (id: string) => {
+    setCustomers((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      saveToStorage('customers', next);
+      return next;
+    });
+    await dbService.deleteCustomerRemote(id);
+  };
+
   const clearAllCustomers = () => {
     setCustomers([]);
     setWalletTransactions([]);
@@ -208,6 +234,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateCustomer,
         topUpWallet,
         deductWallet,
+        deleteCustomer,
         clearAllCustomers,
         walletTransactions,
       }}

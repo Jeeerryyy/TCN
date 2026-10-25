@@ -126,8 +126,14 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       table.minMinutes
     );
 
-    // Collect all cafe orders linked to this session
-    const linkedOrders = orders.filter((o) => session.linkedCafeOrderIds.includes(o.id));
+    // Collect all active cafe orders linked to this session
+    const linkedOrders = orders.filter(
+      (o) =>
+        !o.isBilled &&
+        o.status !== 'cancelled' &&
+        ((session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id)) ||
+          o.tableId === session.tableId)
+    );
     const cafeCharge = linkedOrders.reduce((sum, o) => sum + o.subtotal, 0);
 
     const cafeItems = linkedOrders.flatMap((o) =>
@@ -261,9 +267,18 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    // Mark linked cafe orders as served & billed
-    session.linkedCafeOrderIds.forEach((orderId) => {
-      updateOrderStatus(orderId, 'served');
+    // Mark linked cafe orders as served & billed in local state and Supabase
+    const linkedOrders = orders.filter(
+      (o) =>
+        !o.isBilled &&
+        o.status !== 'cancelled' &&
+        ((session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id)) ||
+          o.tableId === session.tableId)
+    );
+    linkedOrders.forEach((o) => {
+      const updatedOrder = { ...o, status: 'served' as const, isBilled: true, billId: settledBill.id };
+      updateOrderStatus(o.id, 'served');
+      dbService.syncOrder(updatedOrder);
     });
 
     // Finalize session & free up table
@@ -316,6 +331,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     updateOrderStatus(orderId, 'served');
+    const updatedOrder = { ...order, status: 'served' as const, isBilled: true, billId: bill.id };
+    dbService.syncOrder(updatedOrder);
     setBills((prev) => [bill, ...prev]);
     setActiveBillModal(bill);
     dbService.syncBill(bill);

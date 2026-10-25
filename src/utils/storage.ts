@@ -4,12 +4,16 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v3.0.0-supabase-live-sync';
+const CURRENT_STORAGE_VERSION = 'v3.2.0-cloud-menu-sync';
 
-// Only purge legacy ephemeral cache keys, NEVER real business data (bills, sessions, customers)
+// Purge legacy ephemeral/menu cache keys so old local mock food items never resurrect on client devices
 const KEYS_TO_PURGE = [
   'tcn_tcn_bookings',
   'tcn_current_user',
+  'menu',
+  'tcn_menu',
+  'menu_items',
+  'tcn_menu_items',
 ];
 
 // Automatically purge legacy temporary cache keys on version upgrade

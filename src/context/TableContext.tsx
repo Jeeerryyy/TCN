@@ -290,34 +290,39 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
 
+    const updatedSession: TableSession = {
+      ...active,
+      tableId: destTable.id,
+      tableName: destTable.name,
+      tableType: destTable.type,
+      ratePerHour: destTable.ratePerHour,
+      notes: active.notes
+        ? `${active.notes} | Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`
+        : `Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`,
+    };
+
     setSessions((prev) =>
-      prev.map((s) =>
-        s.id === active.id
-          ? {
-              ...s,
-              tableId: destTable.id,
-              tableName: destTable.name,
-              tableType: destTable.type,
-              ratePerHour: destTable.ratePerHour,
-              notes: s.notes
-                ? `${s.notes} | Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`
-                : `Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`,
-            }
-          : s
-      )
+      prev.map((s) => (s.id === active.id ? updatedSession : s))
     );
+
+    const updatedSource = { ...sourceTable, status: 'available' as TableStatus, currentSessionId: undefined };
+    const updatedDest = {
+      ...destTable,
+      status: (active.status === 'paused' ? 'paused' : 'occupied') as TableStatus,
+      currentSessionId: active.id,
+    };
 
     setTables((prev) =>
       prev.map((t) => {
-        if (t.id === fromTableId) {
-          return { ...t, status: 'available', currentSessionId: undefined };
-        }
-        if (t.id === toTableId) {
-          return { ...t, status: active.status === 'paused' ? 'paused' : 'occupied', currentSessionId: active.id };
-        }
+        if (t.id === fromTableId) return updatedSource;
+        if (t.id === toTableId) return updatedDest;
         return t;
       })
     );
+
+    dbService.syncSession(updatedSession);
+    dbService.syncTable(updatedSource);
+    dbService.syncTable(updatedDest);
 
     return true;
   };
@@ -358,16 +363,18 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const active = activeSessionsMap[tableId];
     if (!active) return;
 
+    const updatedSession: TableSession = {
+      ...active,
+      linkedCafeOrderIds: active.linkedCafeOrderIds?.includes(orderId)
+        ? active.linkedCafeOrderIds
+        : [...(active.linkedCafeOrderIds || []), orderId],
+    };
+
     setSessions((prev) =>
-      prev.map((s) =>
-        s.id === active.id
-          ? {
-              ...s,
-              linkedCafeOrderIds: [...s.linkedCafeOrderIds, orderId],
-            }
-          : s
-      )
+      prev.map((s) => (s.id === active.id ? updatedSession : s))
     );
+
+    dbService.syncSession(updatedSession);
   };
 
   const setTableStatus = (tableId: string, status: TableStatus) => {

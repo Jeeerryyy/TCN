@@ -160,7 +160,40 @@ CREATE TABLE IF NOT EXISTS public.orders (
 );
 
 -- ====================================================================
--- 8. ROW LEVEL SECURITY (RLS) & MULTI-DEVICE ACCESS POLICIES
+-- 8. MENU ITEMS TABLE (Cafe Catalog)
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS public.menu_items (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  category text NOT NULL DEFAULT 'beverages',
+  price numeric(10,2) NOT NULL DEFAULT 0,
+  description text,
+  is_vegetarian boolean DEFAULT true,
+  is_available boolean DEFAULT true,
+  prep_time_minutes numeric DEFAULT 1,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Seed the 6 official drinks
+INSERT INTO public.menu_items (id, name, category, price, description, is_vegetarian, is_available, prep_time_minutes)
+VALUES
+  ('m_fanta', 'Fanta', 'beverages', 40, 'Chilled sparkling orange flavoured drink', true, true, 1),
+  ('m_redbull', 'Redbull', 'beverages', 125, 'Chilled energy drink (250ml can)', true, true, 1),
+  ('m_amul_cool', 'Amul Cool', 'beverages', 60, 'Chilled flavoured milk bottle', true, true, 1),
+  ('m_hell', 'Hell', 'beverages', 60, 'Classic energy drink (250ml can)', true, true, 1),
+  ('m_cola', 'Cola', 'beverages', 50, 'Chilled refreshing fizzy cola', true, true, 1),
+  ('m_mineral_water', 'Mineral Water', 'beverages', 10, 'Packaged chilled drinking water (500ml/1L)', true, true, 1)
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  category = EXCLUDED.category,
+  price = EXCLUDED.price,
+  description = EXCLUDED.description,
+  is_vegetarian = EXCLUDED.is_vegetarian,
+  is_available = EXCLUDED.is_available,
+  prep_time_minutes = EXCLUDED.prep_time_minutes;
+
+-- ====================================================================
+-- 9. ROW LEVEL SECURITY (RLS) & MULTI-DEVICE ACCESS POLICIES
 -- ====================================================================
 ALTER TABLE public.game_tables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_sessions ENABLE ROW LEVEL SECURITY;
@@ -168,6 +201,7 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.bills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 
 -- Allow public and authenticated users full realtime access
 DROP POLICY IF EXISTS "Public full access game_tables" ON public.game_tables;
@@ -188,11 +222,14 @@ CREATE POLICY "Public full access bills" ON public.bills FOR ALL TO public USING
 DROP POLICY IF EXISTS "Public full access orders" ON public.orders;
 CREATE POLICY "Public full access orders" ON public.orders FOR ALL TO public USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Public full access menu_items" ON public.menu_items;
+CREATE POLICY "Public full access menu_items" ON public.menu_items FOR ALL TO public USING (true) WITH CHECK (true);
+
 -- Enable Realtime for dynamic live synchronization between Staff and Admin (idempotent)
 DO $$
 BEGIN
   BEGIN
-    ALTER PUBLICATION supabase_realtime ADD TABLE public.game_tables, public.game_sessions, public.bookings, public.bills, public.customers, public.orders;
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.game_tables, public.game_sessions, public.bookings, public.bills, public.customers, public.orders, public.menu_items;
   EXCEPTION 
     WHEN duplicate_object THEN NULL;
     WHEN others THEN NULL;

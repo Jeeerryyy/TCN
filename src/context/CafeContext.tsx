@@ -36,6 +36,7 @@ interface CafeContextType {
 
   // Kitchen KOT Actions
   updateOrderStatus: (orderId: string, status: KitchenStatus) => void;
+  deleteOrder: (orderId: string) => Promise<void>;
   activeKitchenOrders: CafeOrder[];
 }
 
@@ -59,32 +60,65 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [cartCustomerName, setCartCustomerName] = useState<string>('');
 
   useEffect(() => {
-    // Fetch initial cafe orders from cloud on mount
-    dbService.fetchOrders().then((remoteOrders) => {
-      if (remoteOrders !== null) {
-        setOrders(remoteOrders);
-      }
-    });
+    // 1. Fetch live menu and orders from cloud
+    const syncFromCloud = () => {
+      dbService.fetchMenu().then((remoteMenu) => {
+        if (remoteMenu && remoteMenu.length > 0) {
+          setMenu(remoteMenu);
+          saveToStorage('menu', remoteMenu);
+        }
+      });
 
-    // Listen to live cafe orders (Staff counter/table orders streaming to KDS and Admin)
+      dbService.fetchOrders().then((remoteOrders) => {
+        if (remoteOrders !== null) {
+          setOrders(remoteOrders);
+          saveToStorage('orders', remoteOrders);
+        }
+      });
+    };
+
+    // Initial mount sync
+    syncFromCloud();
+
+    // Background 4-second cloud polling across all devices
+    const pollTimer = setInterval(syncFromCloud, 4000);
+
+    // Listen to live cafe orders
     const unsubOrder = dbService.onOrderChange((order, action) => {
       if (action === 'DELETE') {
-        setOrders((prev) => prev.filter((o) => o.id !== order.id));
+        setOrders((prev) => {
+          const next = prev.filter((o) => o.id !== order.id);
+          saveToStorage('orders', next);
+          return next;
+        });
       } else {
         setOrders((prev) => {
           const idx = prev.findIndex((o) => o.id === order.id);
+          let next: CafeOrder[];
           if (idx > -1) {
-            const next = [...prev];
+            next = [...prev];
             next[idx] = order;
-            return next;
+          } else {
+            next = [order, ...prev];
           }
-          return [order, ...prev];
+          saveToStorage('orders', next);
+          return next;
         });
       }
     });
 
+    // Listen to live menu changes
+    const unsubMenu = dbService.onMenuChange((newMenu) => {
+      if (newMenu && newMenu.length > 0) {
+        setMenu(newMenu);
+        saveToStorage('menu', newMenu);
+      }
+    });
+
     return () => {
+      clearInterval(pollTimer);
       unsubOrder();
+      unsubMenu();
     };
   }, []);
 
@@ -185,11 +219,14 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleItemAvailability = (itemId: string) => {
-    setMenu((prev) =>
-      prev.map((item) =>
+    setMenu((prev) => {
+      const next = prev.map((item) =>
         item.id === itemId ? { ...item, isAvailable: !item.isAvailable } : item
-      )
-    );
+      );
+      saveToStorage('menu', next);
+      dbService.syncMenu(next);
+      return next;
+    });
   };
 
   const addMenuItem = (itemData: Omit<MenuItem, 'id'>) => {
@@ -197,22 +234,36 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ...itemData,
       id: `m_${Date.now()}`,
     };
-    setMenu((prev) => [newItem, ...prev]);
+    setMenu((prev) => {
+      const next = [newItem, ...prev];
+      saveToStorage('menu', next);
+      dbService.syncMenu(next);
+      return next;
+    });
   };
 
   const updateMenuItem = (itemId: string, updates: Partial<MenuItem>) => {
-    setMenu((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item))
-    );
+    setMenu((prev) => {
+      const next = prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item));
+      saveToStorage('menu', next);
+      dbService.syncMenu(next);
+      return next;
+    });
   };
 
   const deleteMenuItem = (itemId: string) => {
-    setMenu((prev) => prev.filter((item) => item.id !== itemId));
+    setMenu((prev) => {
+      const next = prev.filter((item) => item.id !== itemId);
+      saveToStorage('menu', next);
+      dbService.syncMenu(next);
+      return next;
+    });
   };
 
   const resetMenuToDefault = () => {
     setMenu(INITIAL_MENU_ITEMS);
     saveToStorage('menu', INITIAL_MENU_ITEMS);
+    dbService.syncMenu(INITIAL_MENU_ITEMS);
   };
 
   const updateOrderStatus = (orderId: string, status: KitchenStatus) => {
@@ -229,6 +280,15 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return order;
       })
     );
+  };
+
+  const deleteOrder = async (orderId: string) => {
+    setOrders((prev) => {
+      const next = prev.filter((o) => o.id !== orderId);
+      saveToStorage('orders', next);
+      return next;
+    });
+    await dbService.deleteOrderRemote(orderId);
   };
 
   // Orders that are currently pending, cooking, or ready in kitchen
@@ -259,6 +319,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteMenuItem,
         resetMenuToDefault,
         updateOrderStatus,
+        deleteOrder,
         activeKitchenOrders,
       }}
     >
