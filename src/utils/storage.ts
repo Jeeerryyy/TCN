@@ -4,33 +4,21 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v2.9.0-cafe-beverages-menu';
+const CURRENT_STORAGE_VERSION = 'v3.0.0-supabase-live-sync';
 
+// Only purge legacy ephemeral cache keys, NEVER real business data (bills, sessions, customers)
 const KEYS_TO_PURGE = [
-  'tables',
-  'sessions',
-  'bookings',
-  'tcn_bookings',
   'tcn_tcn_bookings',
-  'bills',
-  'orders',
-  'customers',
-  'tcn_customers',
-  'wallet_txns',
-  'tcn_wallet_txns',
-  'menu',
   'tcn_current_user',
 ];
 
-// Automatically purge legacy mock data on version upgrade
+// Automatically purge legacy temporary cache keys on version upgrade
 if (typeof window !== 'undefined') {
   try {
     const currentVer = localStorage.getItem(STORAGE_VERSION_KEY);
     if (currentVer !== CURRENT_STORAGE_VERSION) {
-      // Clear legacy cache
       KEYS_TO_PURGE.forEach((key) => {
         localStorage.removeItem(key);
-        localStorage.removeItem(`tcn_${key}`);
       });
       localStorage.setItem(STORAGE_VERSION_KEY, CURRENT_STORAGE_VERSION);
     }

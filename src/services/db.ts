@@ -79,6 +79,29 @@ function mapRowToTable(row: Record<string, any>): Table {
 }
 
 function mapRowToSession(row: Record<string, any>): TableSession {
+  let playerNames: string[] = [String(row.customer_name || 'Player 1')];
+  let linkedCafeOrderIds: string[] = [];
+  let userNotes: string | undefined = row.notes ? String(row.notes) : undefined;
+
+  if (row.notes && typeof row.notes === 'string' && row.notes.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(row.notes);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.playerNames) && parsed.playerNames.length > 0) {
+          playerNames = parsed.playerNames;
+        }
+        if (Array.isArray(parsed.linkedCafeOrderIds)) {
+          linkedCafeOrderIds = parsed.linkedCafeOrderIds;
+        }
+        userNotes = parsed.notes || undefined;
+      }
+    } catch {
+      // plain text note
+    }
+  } else if (Array.isArray(row.player_names)) {
+    playerNames = row.player_names;
+  }
+
   return {
     id: String(row.id),
     tableId: String(row.table_id || ''),
@@ -93,12 +116,10 @@ function mapRowToSession(row: Record<string, any>): TableSession {
     primaryCustomerPhone: row.customer_phone ? String(row.customer_phone) : undefined,
     customerId: row.customer_id ? String(row.customer_id) : undefined,
     playersCount: Number(row.players_count) || 1,
-    playerNames: Array.isArray(row.player_names)
-      ? row.player_names
-      : [String(row.customer_name || 'Player 1')],
+    playerNames,
     status: (row.status as 'active' | 'paused' | 'completed') || 'active',
-    notes: row.notes ? String(row.notes) : undefined,
-    linkedCafeOrderIds: Array.isArray(row.linked_cafe_order_ids) ? row.linked_cafe_order_ids : [],
+    notes: userNotes,
+    linkedCafeOrderIds,
   };
 }
 
@@ -139,7 +160,25 @@ function mapRowToCustomer(row: Record<string, any>): Customer {
 
 function mapRowToBill(row: Record<string, any>): Bill {
   let items: any[] = [];
-  if (typeof row.items === 'string') {
+  let discountReason: string | undefined = row.discount_reason ? String(row.discount_reason) : undefined;
+  let splitDetails: any = undefined;
+  let sessionStartTime = String(row.created_at || new Date().toISOString());
+  let sessionEndTime = row.settled_at ? String(row.settled_at) : undefined;
+
+  if (row.discount_reason && typeof row.discount_reason === 'string' && row.discount_reason.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(row.discount_reason);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) items = parsed.items;
+        if (parsed.splitDetails) splitDetails = parsed.splitDetails;
+        if (parsed.sessionStartTime) sessionStartTime = parsed.sessionStartTime;
+        if (parsed.sessionEndTime) sessionEndTime = parsed.sessionEndTime;
+        discountReason = parsed.reason || undefined;
+      }
+    } catch {
+      // plain text discount reason
+    }
+  } else if (typeof row.items === 'string') {
     try {
       items = JSON.parse(row.items);
     } catch {
@@ -149,14 +188,40 @@ function mapRowToBill(row: Record<string, any>): Bill {
     items = row.items;
   }
 
+  // Fallback if no items saved
+  if (items.length === 0) {
+    items = [
+      {
+        id: `li_${row.id}_table`,
+        type: 'table_time',
+        title: String(row.table_name || 'Table Session'),
+        subtitle: `Table Charge (${row.table_name || 'Session'})`,
+        quantity: 1,
+        unitPrice: Number(row.table_charge) || 0,
+        totalPrice: Number(row.table_charge) || 0,
+      },
+    ];
+    if (Number(row.cafe_charge) > 0) {
+      items.push({
+        id: `li_${row.id}_cafe`,
+        type: 'cafe_item',
+        title: 'Café & Drinks',
+        subtitle: 'Food and beverages tab',
+        quantity: 1,
+        unitPrice: Number(row.cafe_charge) || 0,
+        totalPrice: Number(row.cafe_charge) || 0,
+      });
+    }
+  }
+
   return {
     id: String(row.id),
     invoiceNumber: String(row.invoice_number || ''),
     sessionId: row.session_id ? String(row.session_id) : undefined,
     tableId: row.table_id ? String(row.table_id) : undefined,
     tableName: row.table_name ? String(row.table_name) : undefined,
-    sessionStartTime: String(row.created_at || new Date().toISOString()),
-    sessionEndTime: row.settled_at ? String(row.settled_at) : undefined,
+    sessionStartTime,
+    sessionEndTime,
     customerName: String(row.customer_name || 'Walk-in Guest'),
     customerPhone: row.customer_phone ? String(row.customer_phone) : undefined,
     items,
@@ -164,11 +229,12 @@ function mapRowToBill(row: Record<string, any>): Bill {
     cafeCharge: Number(row.cafe_charge) || 0,
     subtotal: Number(row.subtotal) || 0,
     discountAmount: Number(row.discount_amount) || 0,
-    discountReason: row.discount_reason ? String(row.discount_reason) : undefined,
+    discountReason,
     taxGstAmount: Number(row.tax_gst_amount) || 0,
     finalTotal: Number(row.final_total) || 0,
     status: (row.status as any) || 'settled',
     paymentMethod: (row.payment_method as any) || 'cash',
+    splitDetails,
     createdAt: String(row.created_at || new Date().toISOString()),
     settledAt: row.settled_at ? String(row.settled_at) : new Date().toISOString(),
     settledByStaff: String(row.settled_by || 'Floor Manager'),
@@ -362,28 +428,15 @@ export const dbService = {
       const { error } = await supabase.from('game_tables').upsert({
         id: table.id,
         name: table.name,
-        short_code: table.shortCode,
         type: table.type,
         status: table.status,
         rate_per_hour: table.ratePerHour,
-        min_minutes: table.minMinutes,
         size: table.size,
         cloth_color: table.clothColor,
-        current_session_id: table.currentSessionId || null,
-        location_zone: table.locationZone || null,
       });
 
-      if (error && (error.code === 'PGRST204' || error.message.includes('column'))) {
-        // Fallback for minimal table schema without extended columns
-        await supabase.from('game_tables').upsert({
-          id: table.id,
-          name: table.name,
-          type: table.type,
-          status: table.status,
-          rate_per_hour: table.ratePerHour,
-          size: table.size,
-          cloth_color: table.clothColor,
-        });
+      if (error) {
+        console.warn('[DB Sync] Table upsert error:', error.message);
       }
     } catch (e) {
       console.warn('[DB Sync] Table upsert deferred:', e);
@@ -407,7 +460,14 @@ export const dbService = {
     const supabase = getSupabaseClient();
     if (!supabase) return;
     try {
-      await supabase.from('game_sessions').upsert({
+      // Pack extra metadata safely into notes text field so PostgreSQL column constraints are never violated
+      const extraMeta = {
+        notes: session.notes || null,
+        playerNames: session.playerNames || [],
+        linkedCafeOrderIds: session.linkedCafeOrderIds || [],
+      };
+
+      const { error } = await supabase.from('game_sessions').upsert({
         id: session.id,
         table_id: session.tableId,
         table_name: session.tableName,
@@ -416,16 +476,18 @@ export const dbService = {
         start_time: session.startTime,
         end_time: session.endTime || null,
         paused_at: session.pausedAt || null,
-        total_paused_duration_ms: session.totalPausedDurationMs,
-        customer_name: session.primaryCustomerName,
+        total_paused_duration_ms: session.totalPausedDurationMs || 0,
+        customer_name: session.primaryCustomerName || 'Walk-in Guest',
         customer_phone: session.primaryCustomerPhone || null,
         customer_id: session.customerId || null,
-        players_count: session.playersCount,
-        player_names: session.playerNames,
+        players_count: session.playersCount || 1,
         status: session.status,
-        notes: session.notes || null,
-        linked_cafe_order_ids: session.linkedCafeOrderIds,
+        notes: JSON.stringify(extraMeta),
       });
+
+      if (error) {
+        console.warn('[DB Sync] Session upsert error:', error.message);
+      }
     } catch (e) {
       console.warn('[DB Sync] Session sync deferred:', e);
     }
@@ -484,7 +546,16 @@ export const dbService = {
     const supabase = getSupabaseClient();
     if (!supabase) return;
     try {
-      await supabase.from('bills').upsert({
+      // Pack items and splitDetails safely into discount_reason text column
+      const meta = {
+        reason: bill.discountReason || null,
+        items: bill.items || [],
+        splitDetails: bill.splitDetails || null,
+        sessionStartTime: bill.sessionStartTime,
+        sessionEndTime: bill.sessionEndTime,
+      };
+
+      const { error } = await supabase.from('bills').upsert({
         id: bill.id,
         invoice_number: bill.invoiceNumber,
         session_id: bill.sessionId || null,
@@ -492,12 +563,11 @@ export const dbService = {
         table_name: bill.tableName || null,
         customer_name: bill.customerName,
         customer_phone: bill.customerPhone || null,
-        items: JSON.stringify(bill.items || []),
         table_charge: bill.tableCharge,
         cafe_charge: bill.cafeCharge,
         subtotal: bill.subtotal,
         discount_amount: bill.discountAmount,
-        discount_reason: bill.discountReason || null,
+        discount_reason: JSON.stringify(meta),
         tax_gst_amount: bill.taxGstAmount,
         final_total: bill.finalTotal,
         payment_method: bill.paymentMethod,
@@ -506,6 +576,10 @@ export const dbService = {
         settled_at: bill.settledAt,
         settled_by: bill.settledByStaff,
       });
+
+      if (error) {
+        console.warn('[DB Sync] Bill upsert error:', error.message);
+      }
     } catch (e) {
       console.warn('[DB Sync] Bill sync deferred:', e);
     }

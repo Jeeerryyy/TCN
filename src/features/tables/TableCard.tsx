@@ -25,10 +25,41 @@ export const TableCard: React.FC<TableCardProps> = ({
   onAddCafeOrder,
   onSettleBill,
 }) => {
-  const { activeSessionsMap, pauseSession, resumeSession, tickCounter, sessions } = useTables();
+  const { activeSessionsMap, pauseSession, resumeSession, tickCounter, sessions, bookings } = useTables();
   const { orders } = useCafe();
 
-  const session = activeSessionsMap[table.id];
+  // Find active session for this table
+  let session = activeSessionsMap[table.id];
+
+  // Robust live sync fallback: If table is marked occupied/paused in Supabase, but session row is still in flight,
+  // find the latest matching session or synthesize a live session placeholder so "Start Game" is NEVER shown on an active table!
+  if (!session && (table.status === 'occupied' || table.status === 'paused')) {
+    const matchingSession = sessions.find((s) => s.tableId === table.id && s.status !== 'completed');
+    if (matchingSession) {
+      session = matchingSession;
+    } else {
+      session = {
+        id: table.currentSessionId || `sess_${table.id}_live`,
+        tableId: table.id,
+        tableName: table.name,
+        tableType: table.type,
+        ratePerHour: table.ratePerHour,
+        startTime: new Date().toISOString(),
+        totalPausedDurationMs: 0,
+        primaryCustomerName: 'Live Game (Staff In-Progress)',
+        playersCount: 1,
+        playerNames: ['Player 1'],
+        status: table.status === 'paused' ? 'paused' : 'active',
+        linkedCafeOrderIds: [],
+      };
+    }
+  }
+
+  // Active confirmed booking for today
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeBooking = bookings.find(
+    (b) => b.tableId === table.id && b.status === 'confirmed' && b.bookingDate === todayStr
+  );
 
   // Most recent completed session for this table (provides proof even after settlement)
   const lastCompletedSession = useMemo(() => {
@@ -222,8 +253,22 @@ export const TableCard: React.FC<TableCardProps> = ({
           ) : (
             /* Vacant Table Info */
             <div className="py-2 text-center space-y-1">
-              <p className="text-xs text-[#15191E] font-medium">Table ready for session</p>
-              <p className="text-[11px] text-[#60646C] font-mono">Cloth: {table.clothColor}</p>
+              {activeBooking ? (
+                <div className="bg-[#FFF4ED] border border-[#FF5900]/30 rounded-[6px] p-2 text-left space-y-0.5">
+                  <div className="flex items-center justify-between text-xs font-semibold text-[#FF5900]">
+                    <span>Reserved for {activeBooking.customerName}</span>
+                    <span className="font-mono text-[11px]">{activeBooking.startTime}</span>
+                  </div>
+                  <div className="text-[11px] text-[#60646C]">
+                    Deposit: {formatINR(activeBooking.advanceDeposit)} · {activeBooking.durationMinutes}m ({activeBooking.playersCount} players)
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-[#15191E] font-medium">Table ready for session</p>
+                  <p className="text-[11px] text-[#60646C] font-mono">Cloth: {table.clothColor}</p>
+                </>
+              )}
               {lastCompletedSession && (
                 <div className="mt-1.5 pt-1.5 border-t border-[#B9BBC6]/60 text-[11px] font-mono text-[#60646C] bg-[#F3F3F7] rounded-[6px] p-2 text-left">
                   <div className="text-[9px] uppercase font-semibold text-[#8B8D98] tracking-wider mb-0.5">

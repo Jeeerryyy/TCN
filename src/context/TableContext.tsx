@@ -1,6 +1,6 @@
 /* Apple UI Design System – Verified: 8pt Grid, SF Pro Typography, Material-Depth, Natural Spring Motion */
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { Table, TableSession, TableStatus, TableBooking } from '../types/table.types';
 import { INITIAL_TABLES, INITIAL_SESSIONS, INITIAL_BOOKINGS } from '../data/initialTables';
 import { loadFromStorage, saveToStorage, clearBookingsStorage } from '../utils/storage';
@@ -70,24 +70,31 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Initialize realtime WebSocket listener
     const unsubRealtime = dbService.initRealtimeSubscription();
 
-    // Fetch initial data from cloud on mount
-    dbService.fetchTables().then((remoteTables) => {
-      if (remoteTables && remoteTables.length > 0) {
-        setTables(remoteTables);
-      }
-    });
+    const syncFromCloud = () => {
+      dbService.fetchTables().then((remoteTables) => {
+        if (remoteTables && remoteTables.length > 0) {
+          setTables(remoteTables);
+        }
+      });
 
-    dbService.fetchSessions().then((remoteSessions) => {
-      if (remoteSessions) {
-        setSessions(remoteSessions);
-      }
-    });
+      dbService.fetchSessions().then((remoteSessions) => {
+        if (remoteSessions) {
+          setSessions(remoteSessions);
+        }
+      });
 
-    dbService.fetchBookings().then((remoteBookings) => {
-      if (remoteBookings) {
-        setBookings(remoteBookings);
-      }
-    });
+      dbService.fetchBookings().then((remoteBookings) => {
+        if (remoteBookings) {
+          setBookings(remoteBookings);
+        }
+      });
+    };
+
+    // Initial fetch on mount
+    syncFromCloud();
+
+    // Background cloud polling every 4 seconds to guarantee multi-device sync
+    const pollTimer = setInterval(syncFromCloud, 4000);
 
     // Listen to live table changes
     const unsubTable = dbService.onTableChange((tbl, action) => {
@@ -141,6 +148,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
 
     return () => {
+      clearInterval(pollTimer);
       unsubRealtime();
       unsubTable();
       unsubSession();
@@ -161,13 +169,41 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     saveToStorage('bookings', bookings);
   }, [bookings]);
 
-  // Fast hashmap of active table sessions
-  const activeSessionsMap = sessions.reduce<Record<string, TableSession>>((acc, sess) => {
-    if (sess.status !== 'completed') {
-      acc[sess.tableId] = sess;
+  // Fast hashmap of active table sessions with guaranteed fallback for occupied/paused tables
+  const activeSessionsMap = useMemo(() => {
+    const map: Record<string, TableSession> = {};
+    for (const sess of sessions) {
+      if (sess.status !== 'completed' && !map[sess.tableId]) {
+        map[sess.tableId] = sess;
+      }
     }
-    return acc;
-  }, {});
+
+    // Guarantee that if a table is occupied or paused in cloud, an active session entry always exists
+    for (const table of tables) {
+      if ((table.status === 'occupied' || table.status === 'paused') && !map[table.id]) {
+        const latestSession = sessions.find((s) => s.tableId === table.id && s.status !== 'completed');
+        if (latestSession) {
+          map[table.id] = latestSession;
+        } else {
+          map[table.id] = {
+            id: table.currentSessionId || `sess_${table.id}_live`,
+            tableId: table.id,
+            tableName: table.name,
+            tableType: table.type,
+            ratePerHour: table.ratePerHour,
+            startTime: new Date().toISOString(),
+            totalPausedDurationMs: 0,
+            primaryCustomerName: 'Live Game (Staff In-Progress)',
+            playersCount: 1,
+            playerNames: ['Player 1'],
+            status: table.status === 'paused' ? 'paused' : 'active',
+            linkedCafeOrderIds: [],
+          };
+        }
+      }
+    }
+    return map;
+  }, [sessions, tables]);
 
   const startSession = (params: StartSessionParams) => {
     const targetTable = tables.find((t) => t.id === params.tableId);

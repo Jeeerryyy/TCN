@@ -56,12 +56,37 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeBillModal, setActiveBillModal] = useState<Bill | null>(null);
 
   useEffect(() => {
-    // Fetch initial bills from cloud on mount
-    dbService.fetchBills().then((remoteBills) => {
-      if (remoteBills !== null) {
-        setBills(remoteBills);
-      }
-    });
+    const syncBillsFromCloud = () => {
+      dbService.fetchBills().then((remoteBills) => {
+        if (remoteBills !== null) {
+          setBills((localBills) => {
+            // Merge remote bills with any local bills not yet in remote
+            const remoteMap = new Map(remoteBills.map((b) => [b.id, b]));
+            const missingInRemote = localBills.filter((b) => !remoteMap.has(b.id));
+
+            // Sync any missing local bills to Supabase in background
+            if (missingInRemote.length > 0) {
+              missingInRemote.forEach((b) => dbService.syncBill(b));
+            }
+
+            // Return combined list sorted by settledAt/createdAt desc
+            const combined = [...remoteBills, ...missingInRemote];
+            combined.sort(
+              (a, b) =>
+                new Date(b.settledAt || b.createdAt).getTime() -
+                new Date(a.settledAt || a.createdAt).getTime()
+            );
+            return combined;
+          });
+        }
+      });
+    };
+
+    // Initial fetch on mount
+    syncBillsFromCloud();
+
+    // Background cloud polling every 4 seconds to guarantee multi-device live sync
+    const pollTimer = setInterval(syncBillsFromCloud, 4000);
 
     // Listen to live bill settlements and deletions (Staff POS settlements streaming to Admin)
     const unsubBill = dbService.onBillChange((bill, action) => {
@@ -85,6 +110,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
 
     return () => {
+      clearInterval(pollTimer);
       unsubBill();
     };
   }, []);
