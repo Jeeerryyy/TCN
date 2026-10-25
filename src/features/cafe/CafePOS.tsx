@@ -20,10 +20,10 @@ export const CafePOS: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-medium text-[#000000] flex items-center gap-2">
-            <Coffee className="w-5 h-5 text-[#FF5900]" /> Café POS & Order Terminal
+            <Coffee className="w-5 h-5 text-[#FF5900]" /> Café & Drinks
           </h2>
           <p className="text-xs text-[#60646C] mt-0.5">
-            Take food and beverage orders, link charges directly to playing tables, and dispatch KOT tickets
+            Take beverage and drink orders, link charges directly to playing tables, and dispatch KOT tickets
           </p>
         </div>
 

@@ -82,7 +82,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     },
     {
       id: 'cafe' as const,
-      label: 'Café & POS',
+      label: 'Café & Drinks',
       icon: Coffee,
     },
     {
@@ -119,7 +119,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
     },
     {
       id: 'cafe' as const,
-      label: 'Café & POS',
+      label: 'Café & Drinks',
       icon: Coffee,
     },
     {
