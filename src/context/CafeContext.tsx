@@ -30,6 +30,9 @@ interface CafeContextType {
   // Menu Admin Actions
   toggleItemAvailability: (itemId: string) => void;
   addMenuItem: (item: Omit<MenuItem, 'id'>) => void;
+  updateMenuItem: (itemId: string, updates: Partial<MenuItem>) => void;
+  deleteMenuItem: (itemId: string) => void;
+  resetMenuToDefault: () => void;
 
   // Kitchen KOT Actions
   updateOrderStatus: (orderId: string, status: KitchenStatus) => void;
@@ -197,6 +200,21 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMenu((prev) => [newItem, ...prev]);
   };
 
+  const updateMenuItem = (itemId: string, updates: Partial<MenuItem>) => {
+    setMenu((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item))
+    );
+  };
+
+  const deleteMenuItem = (itemId: string) => {
+    setMenu((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
+  const resetMenuToDefault = () => {
+    setMenu(INITIAL_MENU_ITEMS);
+    saveToStorage('menu', INITIAL_MENU_ITEMS);
+  };
+
   const updateOrderStatus = (orderId: string, status: KitchenStatus) => {
     setOrders((prev) =>
       prev.map((order) => {
@@ -237,6 +255,9 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         submitCartOrder,
         toggleItemAvailability,
         addMenuItem,
+        updateMenuItem,
+        deleteMenuItem,
+        resetMenuToDefault,
         updateOrderStatus,
         activeKitchenOrders,
       }}

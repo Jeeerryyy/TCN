@@ -4,7 +4,7 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v2.8.0-clean-production-sync';
+const CURRENT_STORAGE_VERSION = 'v2.9.0-cafe-beverages-menu';
 
 const KEYS_TO_PURGE = [
   'tables',

@@ -24,6 +24,7 @@ import { TransactionHistory } from './features/billing/TransactionHistory';
 import { RevenueReports } from './features/reports/RevenueReports';
 import { DatabaseSettings } from './features/admin/DatabaseSettings';
 import { ReceiptSettings } from './features/admin/ReceiptSettings';
+import { CafeMenuStudio } from './features/cafe/CafeMenuStudio';
 import { ShieldAlert } from 'lucide-react';
 
 export const AppContent: React.FC = () => {
@@ -52,6 +53,13 @@ export const AppContent: React.FC = () => {
       )}
       {currentTab === 'bookings' && <BookingManager />}
       {currentTab === 'cafe' && <CafePOS />}
+      {currentTab === 'cafe-studio' && (
+        isAdmin ? (
+          <CafeMenuStudio />
+        ) : (
+          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+        )
+      )}
       {currentTab === 'kitchen' && <KitchenOrdersView />}
       {currentTab === 'crm' && (
         isAdmin ? (

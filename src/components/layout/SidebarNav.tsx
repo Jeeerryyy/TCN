@@ -28,6 +28,7 @@ export type ActiveNavTab =
   | 'table-studio'
   | 'bookings'
   | 'cafe'
+  | 'cafe-studio'
   | 'kitchen'
   | 'crm'
   | 'billing'
@@ -135,6 +136,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'table-studio' as const,
       label: 'Table Studio & Rates',
       icon: Sliders,
+      adminBadge: true,
+    },
+    {
+      id: 'cafe-studio' as const,
+      label: 'Café Menu Studio',
+      icon: Coffee,
       adminBadge: true,
     },
     {
