@@ -7,10 +7,15 @@ import { Button } from '../../components/ui/Button';
 import { formatDateTime } from '../../utils/formatters';
 import { ChefHat, CheckCircle2, Clock, Flame, BellRing } from 'lucide-react';
 import { KitchenStatus } from '../../types/cafe.types';
+import { KitchenOrdersSkeleton } from '../../components/ui/Skeleton';
 
 export const KitchenOrdersView: React.FC = () => {
-  const { orders, updateOrderStatus } = useCafe();
+  const { orders, updateOrderStatus, isLoading } = useCafe();
   const [mobileStage, setMobileStage] = useState<KitchenStatus | 'all'>('all');
+
+  if (isLoading && orders.length === 0) {
+    return <KitchenOrdersSkeleton />;
+  }
 
   const columns: { id: KitchenStatus; title: string; icon: React.ReactNode; color: string }[] = [
     {

@@ -10,6 +10,8 @@ import { Modal } from '../../components/ui/Modal';
 import { formatINR } from '../../utils/formatters';
 import { CustomerDetailModal } from './CustomerDetailModal';
 import { Users, UserPlus, Wallet, Phone, Trash2 } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
+import { CustomerListSkeleton } from '../../components/ui/Skeleton';
 
 export const CustomerList: React.FC = () => {
   const {
@@ -20,7 +22,10 @@ export const CustomerList: React.FC = () => {
     addCustomer,
     topUpWallet,
     clearAllCustomers,
+    isLoading,
   } = useCustomers();
+
+  const { success, warning } = useToast();
 
   const [activeDetailCustomer, setActiveDetailCustomer] = useState<Customer | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -35,10 +40,14 @@ export const CustomerList: React.FC = () => {
   const [newPrefGame, setNewPrefGame] = useState<'pool' | 'snooker' | 'both'>('both');
   const [newNotes, setNewNotes] = useState('');
 
+  if (isLoading && customers.length === 0) {
+    return <CustomerListSkeleton />;
+  }
+
   const handleCreateCustomer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim() || !newPhone.trim()) {
-      alert('Name and phone number are required.');
+      warning('Name and phone number are required.', 'Missing Fields');
       return;
     }
 
@@ -51,6 +60,7 @@ export const CustomerList: React.FC = () => {
       notes: newNotes.trim() || undefined,
     });
 
+    success(`${newName.trim()} has been registered as a member.`, 'Customer Added');
     setIsAddModalOpen(false);
     setNewName('');
     setNewPhone('');

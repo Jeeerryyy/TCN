@@ -6,10 +6,15 @@ import { OrderCart } from './OrderCart';
 import { Coffee, ShoppingBag, ArrowRight, Utensils } from 'lucide-react';
 import { useCafe } from '../../context/CafeContext';
 import { formatINR } from '../../utils/formatters';
+import { CafePOSSkeleton } from '../../components/ui/Skeleton';
 
 export const CafePOS: React.FC = () => {
-  const { cart } = useCafe();
+  const { cart, menu, isLoading } = useCafe();
   const [mobileTab, setMobileTab] = useState<'catalog' | 'cart'>('catalog');
+
+  if (isLoading && menu.length === 0) {
+    return <CafePOSSkeleton />;
+  }
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);

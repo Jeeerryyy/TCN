@@ -1,35 +1,127 @@
 /* Brex Design System – High Contrast, Geometric Inter, Action Orange (#FF5900), Solid Surfaces */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TableProvider } from './context/TableContext';
 import { CafeProvider } from './context/CafeContext';
 import { CustomerProvider } from './context/CustomerContext';
 import { BillingProvider } from './context/BillingContext';
+import { ToastProvider, useToast } from './context/ToastContext';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { MainLayout } from './components/layout/MainLayout';
 import { ActiveNavTab } from './components/layout/SidebarNav';
 
-// Auth Screen
+// Skeleton Fallbacks
+import {
+  DashboardSkeleton,
+  FloorPlanSkeleton,
+  CafePOSSkeleton,
+  KitchenOrdersSkeleton,
+  CustomerListSkeleton,
+  TransactionHistorySkeleton,
+  RevenueReportsSkeleton,
+  TableStudioSkeleton,
+  BookingManagerSkeleton,
+} from './components/ui/Skeleton';
+
+// Auth Screen (Eager loaded for immediate security lock)
 import { LoginScreen } from './features/auth/LoginScreen';
 
-// Feature Views
-import { DashboardOverview } from './features/dashboard/DashboardOverview';
-import { TableFloorPlan } from './features/tables/TableFloorPlan';
-import { TableStudio } from './features/tables/TableStudio';
-import { BookingManager } from './features/tables/BookingManager';
-import { CafePOS } from './features/cafe/CafePOS';
-import { KitchenOrdersView } from './features/cafe/KitchenOrdersView';
-import { CustomerList } from './features/crm/CustomerList';
-import { TransactionHistory } from './features/billing/TransactionHistory';
-import { RevenueReports } from './features/reports/RevenueReports';
-import { DatabaseSettings } from './features/admin/DatabaseSettings';
-import { ReceiptSettings } from './features/admin/ReceiptSettings';
-import { CafeMenuStudio } from './features/cafe/CafeMenuStudio';
+// Lazy Loaded Feature Views for Instant Initial Hydration & Code Splitting
+const DashboardOverview = lazy(() =>
+  import('./features/dashboard/DashboardOverview').then((m) => ({ default: m.DashboardOverview }))
+);
+const TableFloorPlan = lazy(() =>
+  import('./features/tables/TableFloorPlan').then((m) => ({ default: m.TableFloorPlan }))
+);
+const TableStudio = lazy(() =>
+  import('./features/tables/TableStudio').then((m) => ({ default: m.TableStudio }))
+);
+const BookingManager = lazy(() =>
+  import('./features/tables/BookingManager').then((m) => ({ default: m.BookingManager }))
+);
+const CafePOS = lazy(() =>
+  import('./features/cafe/CafePOS').then((m) => ({ default: m.CafePOS }))
+);
+const KitchenOrdersView = lazy(() =>
+  import('./features/cafe/KitchenOrdersView').then((m) => ({ default: m.KitchenOrdersView }))
+);
+const CustomerList = lazy(() =>
+  import('./features/crm/CustomerList').then((m) => ({ default: m.CustomerList }))
+);
+const TransactionHistory = lazy(() =>
+  import('./features/billing/TransactionHistory').then((m) => ({ default: m.TransactionHistory }))
+);
+const RevenueReports = lazy(() =>
+  import('./features/reports/RevenueReports').then((m) => ({ default: m.RevenueReports }))
+);
+const DatabaseSettings = lazy(() =>
+  import('./features/admin/DatabaseSettings').then((m) => ({ default: m.DatabaseSettings }))
+);
+const ReceiptSettings = lazy(() =>
+  import('./features/admin/ReceiptSettings').then((m) => ({ default: m.ReceiptSettings }))
+);
+const CafeMenuStudio = lazy(() =>
+  import('./features/cafe/CafeMenuStudio').then((m) => ({ default: m.CafeMenuStudio }))
+);
+const SecuritySettings = lazy(() =>
+  import('./features/admin/SecuritySettings').then((m) => ({ default: m.SecuritySettings }))
+);
+
+
 import { ShieldAlert } from 'lucide-react';
 
 export const AppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<ActiveNavTab>('dashboard');
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, logout } = useAuth();
+  const { info } = useToast();
+
+  // Keyboard navigation shortcuts for power-user staff / cashiers
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      // Ignore if user is actively typing in an input or textarea
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      if (e.altKey) {
+        switch (e.key) {
+          case '1':
+            e.preventDefault();
+            setCurrentTab('dashboard');
+            break;
+          case '2':
+            e.preventDefault();
+            setCurrentTab('tables');
+            break;
+          case '3':
+            e.preventDefault();
+            setCurrentTab('cafe');
+            break;
+          case '4':
+            e.preventDefault();
+            setCurrentTab('kitchen');
+            break;
+          case '5':
+            e.preventDefault();
+            setCurrentTab('billing');
+            break;
+          case 'l':
+          case 'L':
+            e.preventDefault();
+            logout();
+            info('Terminal session locked', 'Security Lock');
+            break;
+          default:
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, [logout, info]);
 
   // If session is locked / not authenticated, render Login Terminal
   if (!isAuthenticated) {
@@ -38,58 +130,94 @@ export const AppContent: React.FC = () => {
 
   return (
     <MainLayout currentTab={currentTab} onSelectTab={setCurrentTab}>
-      {currentTab === 'dashboard' && (
-        <DashboardOverview onNavigate={(tab) => setCurrentTab(tab)} />
-      )}
-      {currentTab === 'tables' && (
-        <TableFloorPlan onNavigateToCafePOS={() => setCurrentTab('cafe')} />
-      )}
-      {currentTab === 'table-studio' && (
-        isAdmin ? (
-          <TableStudio />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
-      {currentTab === 'bookings' && <BookingManager />}
-      {currentTab === 'cafe' && <CafePOS />}
-      {currentTab === 'cafe-studio' && (
-        isAdmin ? (
-          <CafeMenuStudio />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
-      {currentTab === 'kitchen' && <KitchenOrdersView />}
-      {currentTab === 'crm' && (
-        isAdmin ? (
-          <CustomerList />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
-      {currentTab === 'billing' && <TransactionHistory />}
-      {currentTab === 'reports' && (
-        isAdmin ? (
-          <RevenueReports />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
-      {currentTab === 'receipt-settings' && (
-        isAdmin ? (
-          <ReceiptSettings />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
-      {currentTab === 'database' && (
-        isAdmin ? (
-          <DatabaseSettings />
-        ) : (
-          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
-        )
-      )}
+      <ErrorBoundary fallbackTitle={`Error in ${currentTab.toUpperCase()} Panel`}>
+        {currentTab === 'dashboard' && (
+          <Suspense fallback={<DashboardSkeleton />}>
+            <DashboardOverview onNavigate={(tab) => setCurrentTab(tab)} />
+          </Suspense>
+        )}
+        {currentTab === 'tables' && (
+          <Suspense fallback={<FloorPlanSkeleton />}>
+            <TableFloorPlan onNavigateToCafePOS={() => setCurrentTab('cafe')} />
+          </Suspense>
+        )}
+        {currentTab === 'table-studio' &&
+          (isAdmin ? (
+            <Suspense fallback={<TableStudioSkeleton />}>
+              <TableStudio />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'bookings' && (
+          <Suspense fallback={<BookingManagerSkeleton />}>
+            <BookingManager />
+          </Suspense>
+        )}
+        {currentTab === 'cafe' && (
+          <Suspense fallback={<CafePOSSkeleton />}>
+            <CafePOS />
+          </Suspense>
+        )}
+        {currentTab === 'cafe-studio' &&
+          (isAdmin ? (
+            <Suspense fallback={<CafePOSSkeleton />}>
+              <CafeMenuStudio />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'kitchen' && (
+          <Suspense fallback={<KitchenOrdersSkeleton />}>
+            <KitchenOrdersView />
+          </Suspense>
+        )}
+        {currentTab === 'crm' &&
+          (isAdmin ? (
+            <Suspense fallback={<CustomerListSkeleton />}>
+              <CustomerList />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'billing' && (
+          <Suspense fallback={<TransactionHistorySkeleton />}>
+            <TransactionHistory />
+          </Suspense>
+        )}
+        {currentTab === 'reports' &&
+          (isAdmin ? (
+            <Suspense fallback={<RevenueReportsSkeleton />}>
+              <RevenueReports />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'receipt-settings' &&
+          (isAdmin ? (
+            <Suspense fallback={<TableStudioSkeleton />}>
+              <ReceiptSettings />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'database' &&
+          (isAdmin ? (
+            <Suspense fallback={<TableStudioSkeleton />}>
+              <DatabaseSettings />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+        {currentTab === 'security' &&
+          (isAdmin ? (
+            <Suspense fallback={<TableStudioSkeleton />}>
+              <SecuritySettings />
+            </Suspense>
+          ) : (
+            <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+          ))}
+      </ErrorBoundary>
     </MainLayout>
   );
 };
@@ -119,17 +247,21 @@ const AccessDeniedNotice: React.FC<{ onGoBack: () => void }> = ({ onGoBack }) =>
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <TableProvider>
-        <CafeProvider>
-          <CustomerProvider>
-            <BillingProvider>
-              <AppContent />
-            </BillingProvider>
-          </CustomerProvider>
-        </CafeProvider>
-      </TableProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <TableProvider>
+            <CafeProvider>
+              <CustomerProvider>
+                <BillingProvider>
+                  <AppContent />
+                </BillingProvider>
+              </CustomerProvider>
+            </CafeProvider>
+          </TableProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 };
 

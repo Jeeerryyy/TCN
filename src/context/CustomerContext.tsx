@@ -27,6 +27,8 @@ interface CustomerContextType {
   clearAllCustomers: () => void;
   deleteCustomer: (id: string) => Promise<void>;
   walletTransactions: WalletTransaction[];
+  isLoading: boolean;
+  isSyncing: boolean;
 }
 
 const CustomerContext = createContext<CustomerContextType | undefined>(undefined);
@@ -40,16 +42,25 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadFromStorage('wallet_txns', [])
   );
 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const syncCustomersFromCloud = () => {
-      dbService.fetchCustomers().then((remoteCustomers) => {
-        if (remoteCustomers) {
-          setCustomers(remoteCustomers);
-          saveToStorage('customers', remoteCustomers);
-        }
-      });
+      setIsSyncing(true);
+      dbService
+        .fetchCustomers()
+        .then((remoteCustomers) => {
+          if (remoteCustomers) {
+            setCustomers(remoteCustomers);
+            saveToStorage('customers', remoteCustomers);
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+          setIsSyncing(false);
+        });
     };
 
     // Initial fetch from cloud on mount
@@ -237,6 +248,8 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deleteCustomer,
         clearAllCustomers,
         walletTransactions,
+        isLoading,
+        isSyncing,
       }}
     >
       {children}

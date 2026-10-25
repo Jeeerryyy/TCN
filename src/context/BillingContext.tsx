@@ -40,6 +40,8 @@ interface BillingContextType {
   } | null;
   activeBillModal: Bill | null;
   setActiveBillModal: (bill: Bill | null) => void;
+  isLoading: boolean;
+  isSyncing: boolean;
 }
 
 const BillingContext = createContext<BillingContextType | undefined>(undefined);
@@ -54,15 +56,24 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   );
 
   const [activeBillModal, setActiveBillModal] = useState<Bill | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   useEffect(() => {
     const syncBillsFromCloud = () => {
-      dbService.fetchBills().then((remoteBills) => {
-        if (remoteBills !== null) {
-          setBills(remoteBills);
-          saveToStorage('bills', remoteBills);
-        }
-      });
+      setIsSyncing(true);
+      dbService
+        .fetchBills()
+        .then((remoteBills) => {
+          if (remoteBills !== null) {
+            setBills(remoteBills);
+            saveToStorage('bills', remoteBills);
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+          setIsSyncing(false);
+        });
     };
 
     // Initial fetch on mount
@@ -376,6 +387,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         getPendingFolioForTable,
         activeBillModal,
         setActiveBillModal,
+        isLoading,
+        isSyncing,
       }}
     >
       {children}

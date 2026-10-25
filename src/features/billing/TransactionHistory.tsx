@@ -7,12 +7,17 @@ import { formatINR, formatDateTime } from '../../utils/formatters';
 import { Bill } from '../../types/billing.types';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw } from 'lucide-react';
+import { TransactionHistorySkeleton } from '../../components/ui/Skeleton';
 
 export const TransactionHistory: React.FC = () => {
-  const { bills, deleteBill, clearAllBills, refreshBills } = useBilling();
+  const { bills, deleteBill, clearAllBills, refreshBills, isLoading } = useBilling();
   const [search, setSearch] = useState('');
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  if (isLoading && bills.length === 0) {
+    return <TransactionHistorySkeleton />;
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true);

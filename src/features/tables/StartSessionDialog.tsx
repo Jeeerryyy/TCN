@@ -8,6 +8,7 @@ import { useTables } from '../../context/TableContext';
 import { useCustomers } from '../../context/CustomerContext';
 import { formatINR } from '../../utils/formatters';
 import { User, Users, Play, Phone, Search, Star } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 interface StartSessionDialogProps {
   table: Table | null;
@@ -22,6 +23,7 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
 }) => {
   const { startSession } = useTables();
   const { customers } = useCustomers();
+  const { warning, success } = useToast();
 
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -51,7 +53,7 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim()) {
-      alert('Please enter a customer or player name.');
+      warning('Please enter a customer or player name.', 'Missing Player Name');
       return;
     }
 
@@ -64,6 +66,8 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
       playerNames: [guestName.trim()],
       notes: notes.trim() || undefined,
     });
+
+    success(`Session started on ${table.name}.`, 'Game Started');
 
     // Reset & close
     setGuestName('');

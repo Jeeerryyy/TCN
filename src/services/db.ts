@@ -63,6 +63,54 @@ function notifyStatus(status: SyncStatus, message?: string) {
   statusListeners.forEach((l) => l(status, message));
 }
 
+// --- ENTERPRISE OFFLINE MUTATIONS QUEUE ---
+export interface QueuedMutation {
+  id: string;
+  type: 'table' | 'session' | 'booking' | 'bill' | 'customer' | 'order' | 'menu';
+  action: 'UPSERT' | 'DELETE';
+  payload: any;
+  timestamp: number;
+}
+
+type QueueListener = (count: number) => void;
+const queueListeners = new Set<QueueListener>();
+const OFFLINE_QUEUE_KEY = 'tcn_offline_mutations_queue';
+
+function getOfflineQueue(): QueuedMutation[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveOfflineQueue(queue: QueuedMutation[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    queueListeners.forEach((l) => l(queue.length));
+  } catch (e) {
+    console.warn('[Offline Queue] Save error:', e);
+  }
+}
+
+function enqueueOfflineMutation(mutation: Omit<QueuedMutation, 'id' | 'timestamp'>) {
+  const queue = getOfflineQueue();
+  const entityId = mutation.payload?.id;
+  const filtered = entityId
+    ? queue.filter((q) => !(q.type === mutation.type && q.payload?.id === entityId))
+    : queue;
+
+  filtered.push({
+    ...mutation,
+    id: `mut_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: Date.now(),
+  });
+  saveOfflineQueue(filtered);
+}
+
 // Data Mappers from Supabase snake_case rows to TypeScript models
 function mapRowToTable(row: Record<string, any>): Table {
   return {
@@ -495,7 +543,10 @@ export const dbService = {
   async syncTable(table: Table): Promise<void> {
     broadcastLocally('table', table, 'UPDATE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'table', action: 'UPSERT', payload: table });
+      return;
+    }
     try {
       const { error } = await supabase.from('game_tables').upsert({
         id: table.id,
@@ -508,21 +559,27 @@ export const dbService = {
       });
 
       if (error) {
-        console.warn('[DB Sync] Table upsert error:', error.message);
+        console.warn('[DB Sync] Table upsert error, queued offline:', error.message);
+        enqueueOfflineMutation({ type: 'table', action: 'UPSERT', payload: table });
       }
     } catch (e) {
-      console.warn('[DB Sync] Table upsert deferred:', e);
+      console.warn('[DB Sync] Table upsert deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'table', action: 'UPSERT', payload: table });
     }
   },
 
   async deleteTableRemote(tableId: string): Promise<void> {
     broadcastLocally('table', { id: tableId } as Table, 'DELETE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'table', action: 'DELETE', payload: { id: tableId } });
+      return;
+    }
     try {
       await supabase.from('game_tables').delete().eq('id', tableId);
     } catch (e) {
-      console.warn('[DB Sync] Table delete deferred:', e);
+      console.warn('[DB Sync] Table delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'table', action: 'DELETE', payload: { id: tableId } });
     }
   },
 
@@ -530,7 +587,10 @@ export const dbService = {
   async syncSession(session: TableSession): Promise<void> {
     broadcastLocally('session', session, 'UPDATE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'session', action: 'UPSERT', payload: session });
+      return;
+    }
     try {
       // Pack extra metadata safely into notes text field so PostgreSQL column constraints are never violated
       const extraMeta = {
@@ -558,10 +618,12 @@ export const dbService = {
       });
 
       if (error) {
-        console.warn('[DB Sync] Session upsert error:', error.message);
+        console.warn('[DB Sync] Session upsert error, queued offline:', error.message);
+        enqueueOfflineMutation({ type: 'session', action: 'UPSERT', payload: session });
       }
     } catch (e) {
-      console.warn('[DB Sync] Session sync deferred:', e);
+      console.warn('[DB Sync] Session sync deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'session', action: 'UPSERT', payload: session });
     }
   },
 
@@ -569,7 +631,10 @@ export const dbService = {
   async syncBooking(booking: TableBooking): Promise<void> {
     broadcastLocally('booking', booking, 'UPDATE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'booking', action: 'UPSERT', payload: booking });
+      return;
+    }
     try {
       await supabase.from('bookings').upsert({
         id: booking.id,
@@ -587,18 +652,23 @@ export const dbService = {
         created_at: booking.createdAt,
       });
     } catch (e) {
-      console.warn('[DB Sync] Booking sync deferred:', e);
+      console.warn('[DB Sync] Booking sync deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'booking', action: 'UPSERT', payload: booking });
     }
   },
 
   async deleteBookingRemote(bookingId: string): Promise<void> {
     broadcastLocally('booking', { id: bookingId } as TableBooking, 'DELETE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'booking', action: 'DELETE', payload: { id: bookingId } });
+      return;
+    }
     try {
       await supabase.from('bookings').delete().eq('id', bookingId);
     } catch (e) {
-      console.warn('[DB Sync] Booking delete deferred:', e);
+      console.warn('[DB Sync] Booking delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'booking', action: 'DELETE', payload: { id: bookingId } });
     }
   },
 
@@ -616,7 +686,10 @@ export const dbService = {
   async syncBill(bill: Bill): Promise<void> {
     broadcastLocally('bill', bill, 'INSERT');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'bill', action: 'UPSERT', payload: bill });
+      return;
+    }
     try {
       // Pack items and splitDetails safely into discount_reason text column
       const meta = {
@@ -650,21 +723,27 @@ export const dbService = {
       });
 
       if (error) {
-        console.warn('[DB Sync] Bill upsert error:', error.message);
+        console.warn('[DB Sync] Bill upsert error, queued offline:', error.message);
+        enqueueOfflineMutation({ type: 'bill', action: 'UPSERT', payload: bill });
       }
     } catch (e) {
-      console.warn('[DB Sync] Bill sync deferred:', e);
+      console.warn('[DB Sync] Bill sync deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'bill', action: 'UPSERT', payload: bill });
     }
   },
 
   async deleteBillRemote(billId: string): Promise<void> {
     broadcastLocally('bill', { id: billId } as Bill, 'DELETE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'bill', action: 'DELETE', payload: { id: billId } });
+      return;
+    }
     try {
       await supabase.from('bills').delete().eq('id', billId);
     } catch (e) {
-      console.warn('[DB Sync] Bill delete deferred:', e);
+      console.warn('[DB Sync] Bill delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'bill', action: 'DELETE', payload: { id: billId } });
     }
   },
 
@@ -683,7 +762,10 @@ export const dbService = {
   async syncCustomer(customer: Customer): Promise<void> {
     broadcastLocally('customer', customer, 'UPDATE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'customer', action: 'UPSERT', payload: customer });
+      return;
+    }
     try {
       await supabase.from('customers').upsert({
         id: customer.id,
@@ -698,18 +780,23 @@ export const dbService = {
         notes: customer.notes || null,
       });
     } catch (e) {
-      console.warn('[DB Sync] Customer sync deferred:', e);
+      console.warn('[DB Sync] Customer sync deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'customer', action: 'UPSERT', payload: customer });
     }
   },
 
   async deleteCustomerRemote(customerId: string): Promise<void> {
     broadcastLocally('customer', { id: customerId } as Customer, 'DELETE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'customer', action: 'DELETE', payload: { id: customerId } });
+      return;
+    }
     try {
       await supabase.from('customers').delete().eq('id', customerId);
     } catch (e) {
-      console.warn('[DB Sync] Customer delete deferred:', e);
+      console.warn('[DB Sync] Customer delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'customer', action: 'DELETE', payload: { id: customerId } });
     }
   },
 
@@ -727,7 +814,10 @@ export const dbService = {
   async syncOrder(order: CafeOrder): Promise<void> {
     broadcastLocally('order', order, 'UPDATE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'order', action: 'UPSERT', payload: order });
+      return;
+    }
     try {
       await supabase.from('orders').upsert({
         id: order.id,
@@ -743,18 +833,23 @@ export const dbService = {
         created_at: order.createdAt,
       });
     } catch (e) {
-      console.warn('[DB Sync] Order sync deferred:', e);
+      console.warn('[DB Sync] Order sync deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'order', action: 'UPSERT', payload: order });
     }
   },
 
   async deleteOrderRemote(orderId: string): Promise<void> {
     broadcastLocally('order', { id: orderId } as CafeOrder, 'DELETE');
     const supabase = getSupabaseClient();
-    if (!supabase) return;
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'order', action: 'DELETE', payload: { id: orderId } });
+      return;
+    }
     try {
       await supabase.from('orders').delete().eq('id', orderId);
     } catch (e) {
-      console.warn('[DB Sync] Order delete deferred:', e);
+      console.warn('[DB Sync] Order delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'order', action: 'DELETE', payload: { id: orderId } });
     }
   },
 
@@ -900,4 +995,190 @@ export const dbService = {
     cb(currentSyncStatus);
     return () => statusListeners.delete(cb);
   },
+
+  // --- OFFLINE QUEUE CONTROLS ---
+  getPendingQueueCount(): number {
+    return getOfflineQueue().length;
+  },
+
+  onQueueCountChange(cb: (count: number) => void): () => void {
+    queueListeners.add(cb);
+    cb(getOfflineQueue().length);
+    return () => queueListeners.delete(cb);
+  },
+
+  async flushOfflineQueue(): Promise<{ success: boolean; syncedCount: number }> {
+    const queue = getOfflineQueue();
+    if (queue.length === 0) return { success: true, syncedCount: 0 };
+    const supabase = getSupabaseClient();
+    if (!supabase) return { success: false, syncedCount: 0 };
+
+    notifyStatus('syncing', `Flushing ${queue.length} offline operations...`);
+    const remaining: QueuedMutation[] = [];
+    let syncedCount = 0;
+
+    for (const item of queue) {
+      try {
+        if (item.type === 'session') {
+          const s = item.payload;
+          const extraMeta = {
+            notes: s.notes || null,
+            playerNames: s.playerNames || [],
+            linkedCafeOrderIds: s.linkedCafeOrderIds || [],
+          };
+          const { error } = await supabase.from('game_sessions').upsert({
+            id: s.id,
+            table_id: s.tableId,
+            table_name: s.tableName,
+            table_type: s.tableType,
+            rate_per_hour: s.ratePerHour,
+            start_time: s.startTime,
+            end_time: s.endTime || null,
+            paused_at: s.pausedAt || null,
+            total_paused_duration_ms: s.totalPausedDurationMs || 0,
+            customer_name: s.primaryCustomerName || 'Walk-in Guest',
+            customer_phone: s.primaryCustomerPhone || null,
+            customer_id: s.customerId || null,
+            players_count: s.playersCount || 1,
+            status: s.status,
+            notes: JSON.stringify(extraMeta),
+          });
+          if (error) throw error;
+        } else if (item.type === 'bill') {
+          if (item.action === 'DELETE') {
+            await supabase.from('bills').delete().eq('id', item.payload.id);
+          } else {
+            const b = item.payload;
+            const meta = {
+              reason: b.discountReason || null,
+              items: b.items || [],
+              splitDetails: b.splitDetails || null,
+              sessionStartTime: b.sessionStartTime,
+              sessionEndTime: b.sessionEndTime,
+            };
+            const { error } = await supabase.from('bills').upsert({
+              id: b.id,
+              invoice_number: b.invoiceNumber,
+              session_id: b.sessionId || null,
+              table_id: b.tableId || null,
+              table_name: b.tableName || null,
+              customer_name: b.customerName,
+              customer_phone: b.customerPhone || null,
+              table_charge: b.tableCharge,
+              cafe_charge: b.cafeCharge,
+              subtotal: b.subtotal,
+              discount_amount: b.discountAmount,
+              discount_reason: JSON.stringify(meta),
+              tax_gst_amount: b.taxGstAmount,
+              final_total: b.finalTotal,
+              payment_method: b.paymentMethod,
+              status: b.status,
+              created_at: b.createdAt,
+              settled_at: b.settledAt,
+              settled_by: b.settledByStaff,
+            });
+            if (error) throw error;
+          }
+        } else if (item.type === 'order') {
+          if (item.action === 'DELETE') {
+            await supabase.from('orders').delete().eq('id', item.payload.id);
+          } else {
+            const o = item.payload;
+            const { error } = await supabase.from('orders').upsert({
+              id: o.id,
+              order_number: o.orderNumber,
+              destination: o.destination,
+              table_id: o.tableId || null,
+              table_name: o.tableName || null,
+              customer_name: o.customerName,
+              items: JSON.stringify(o.items),
+              subtotal: o.subtotal,
+              status: o.status,
+              is_billed: o.isBilled,
+              created_at: o.createdAt,
+            });
+            if (error) throw error;
+          }
+        } else if (item.type === 'table') {
+          if (item.action === 'DELETE') {
+            await supabase.from('game_tables').delete().eq('id', item.payload.id);
+          } else {
+            const t = item.payload;
+            const { error } = await supabase.from('game_tables').upsert({
+              id: t.id,
+              name: t.name,
+              type: t.type,
+              status: t.status,
+              rate_per_hour: t.ratePerHour,
+              size: t.size,
+              cloth_color: t.clothColor,
+            });
+            if (error) throw error;
+          }
+        } else if (item.type === 'booking') {
+          if (item.action === 'DELETE') {
+            await supabase.from('bookings').delete().eq('id', item.payload.id);
+          } else {
+            const bk = item.payload;
+            const { error } = await supabase.from('bookings').upsert({
+              id: bk.id,
+              table_id: bk.tableId,
+              table_name: bk.tableName,
+              customer_name: bk.customerName,
+              customer_phone: bk.customerPhone,
+              booking_date: bk.bookingDate,
+              start_time: bk.startTime,
+              duration_minutes: bk.durationMinutes,
+              advance_deposit: bk.advanceDeposit,
+              players_count: bk.playersCount,
+              status: bk.status,
+              notes: bk.notes || null,
+              created_at: bk.createdAt,
+            });
+            if (error) throw error;
+          }
+        } else if (item.type === 'customer') {
+          if (item.action === 'DELETE') {
+            await supabase.from('customers').delete().eq('id', item.payload.id);
+          } else {
+            const c = item.payload;
+            const { error } = await supabase.from('customers').upsert({
+              id: c.id,
+              name: c.name,
+              phone: c.phone,
+              email: c.email || null,
+              tier: c.tier,
+              wallet_balance: c.walletBalance,
+              total_visits: c.totalVisits,
+              total_spent: c.totalSpent,
+              preferred_game: c.preferredGame,
+              notes: c.notes || null,
+            });
+            if (error) throw error;
+          }
+        }
+        syncedCount++;
+      } catch (e) {
+        console.warn('[Offline Queue] Retry failed for mutation:', item.id, e);
+        remaining.push(item);
+      }
+    }
+
+    saveOfflineQueue(remaining);
+    notifyStatus(
+      'connected',
+      remaining.length === 0
+        ? 'All offline mutations synced'
+        : `${remaining.length} offline operations remaining`
+    );
+    return { success: remaining.length === 0, syncedCount };
+  },
 };
+
+// Automatic online auto-flush trigger
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.info('[TCN Network] Internet connection detected. Flushing offline queue...');
+    dbService.flushOfflineQueue();
+  });
+}

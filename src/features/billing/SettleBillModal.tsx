@@ -11,6 +11,7 @@ import { useTables } from '../../context/TableContext';
 import { formatINR, formatTimeOnly } from '../../utils/formatters';
 import { getReceiptConfig } from '../../utils/receiptStorage';
 import { CreditCard, Banknote, QrCode, Wallet, Split, Tag, Check } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 interface SettleBillModalProps {
   table: Table | null;
@@ -26,6 +27,7 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
   const { getPendingFolioForTable, settleTableBill } = useBilling();
   const { activeSessionsMap } = useTables();
   const { customers } = useCustomers();
+  const { warning, success } = useToast();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [customDiscount, setCustomDiscount] = useState<number>(0);
@@ -56,7 +58,10 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
     let splitShares: SplitPaymentShare[] | undefined;
     if (paymentMethod === 'split') {
       if (cashShare + upiShare !== finalTotal) {
-        alert(`Split amounts must equal the final total of ${formatINR(finalTotal)}. Currently: ${formatINR(cashShare + upiShare)}`);
+        warning(
+          `Split amounts must equal the final total of ${formatINR(finalTotal)}. Currently: ${formatINR(cashShare + upiShare)}`,
+          'Split Total Mismatch'
+        );
         return;
       }
       splitShares = [
@@ -76,6 +81,7 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
     });
 
     if (bill) {
+      success(`Bill settled for ${table.name}. Invoice #${bill.invoiceNumber}`, 'Settlement Complete');
       onClose();
     }
   };

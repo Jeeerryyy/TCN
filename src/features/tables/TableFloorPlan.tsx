@@ -11,15 +11,20 @@ import { useBilling } from '../../context/BillingContext';
 import { SettleBillModal } from '../billing/SettleBillModal';
 import { InvoiceReceipt } from '../billing/InvoiceReceipt';
 import { CheckCircle2, Clock, Wrench } from 'lucide-react';
+import { FloorPlanSkeleton } from '../../components/ui/Skeleton';
 
 interface TableFloorPlanProps {
   onNavigateToCafePOS: (tableId?: string) => void;
 }
 
 export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafePOS }) => {
-  const { tables } = useTables();
+  const { tables, isLoading } = useTables();
   const { setSelectedTableId, setCartDestination } = useCafe();
   const { activeBillModal, setActiveBillModal } = useBilling();
+
+  if (isLoading && tables.length === 0) {
+    return <FloorPlanSkeleton />;
+  }
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'pool' | 'snooker'>('all');
   const [sessionModalTable, setSessionModalTable] = useState<Table | null>(null);

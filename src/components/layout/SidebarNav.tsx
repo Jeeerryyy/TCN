@@ -14,6 +14,7 @@ import {
   Database,
   Printer,
   Shield,
+  KeyRound,
   LogOut,
   X,
 } from 'lucide-react';
@@ -34,7 +35,8 @@ export type ActiveNavTab =
   | 'billing'
   | 'reports'
   | 'receipt-settings'
-  | 'database';
+  | 'database'
+  | 'security';
 
 interface SidebarNavProps {
   currentTab: ActiveNavTab;
@@ -170,6 +172,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'database' as const,
       label: 'Cloud Database',
       icon: Database,
+      adminBadge: true,
+    },
+    {
+      id: 'security' as const,
+      label: 'Terminal Security & PINs',
+      icon: KeyRound,
       adminBadge: true,
     },
   ];

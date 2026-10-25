@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button';
 import { useTables } from '../../context/TableContext';
 import { formatINR } from '../../utils/formatters';
 import { ArrowRightLeft } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 interface TransferTableModalProps {
   sourceTable: Table | null;
@@ -20,6 +21,7 @@ export const TransferTableModal: React.FC<TransferTableModalProps> = ({
   onClose,
 }) => {
   const { tables, transferSession } = useTables();
+  const { warning, error: toastError, success: toastSuccess } = useToast();
   const [targetTableId, setTargetTableId] = useState('');
   const [reason, setReason] = useState('');
 
@@ -33,15 +35,16 @@ export const TransferTableModal: React.FC<TransferTableModalProps> = ({
   const handleTransfer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetTableId) {
-      alert('Please select an available destination table.');
+      warning('Please select an available destination table.', 'Target Required');
       return;
     }
 
-    const success = transferSession(sourceTable.id, targetTableId, reason);
-    if (success) {
+    const ok = transferSession(sourceTable.id, targetTableId, reason);
+    if (ok) {
+      toastSuccess(`Session transferred successfully to destination table.`, 'Table Transferred');
       onClose();
     } else {
-      alert('Could not transfer table. Destination table might no longer be available.');
+      toastError('Could not transfer table. Destination table might no longer be available.', 'Transfer Failed');
     }
   };
 

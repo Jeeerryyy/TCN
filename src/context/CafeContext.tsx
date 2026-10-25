@@ -38,6 +38,8 @@ interface CafeContextType {
   updateOrderStatus: (orderId: string, status: KitchenStatus) => void;
   deleteOrder: (orderId: string) => Promise<void>;
   activeKitchenOrders: CafeOrder[];
+  isLoading: boolean;
+  isSyncing: boolean;
 }
 
 const CafeContext = createContext<CafeContextType | undefined>(undefined);
@@ -53,6 +55,9 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadFromStorage('orders', INITIAL_ORDERS)
   );
 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
   // Active POS cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDestination, setCartDestination] = useState<'table' | 'counter' | 'takeaway'>('table');
@@ -62,18 +67,23 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // 1. Fetch live menu and orders from cloud
     const syncFromCloud = () => {
-      dbService.fetchMenu().then((remoteMenu) => {
-        if (remoteMenu && remoteMenu.length > 0) {
-          setMenu(remoteMenu);
-          saveToStorage('menu', remoteMenu);
-        }
-      });
-
-      dbService.fetchOrders().then((remoteOrders) => {
-        if (remoteOrders !== null) {
-          setOrders(remoteOrders);
-          saveToStorage('orders', remoteOrders);
-        }
+      setIsSyncing(true);
+      Promise.all([
+        dbService.fetchMenu().then((remoteMenu) => {
+          if (remoteMenu && remoteMenu.length > 0) {
+            setMenu(remoteMenu);
+            saveToStorage('menu', remoteMenu);
+          }
+        }),
+        dbService.fetchOrders().then((remoteOrders) => {
+          if (remoteOrders) {
+            setOrders(remoteOrders);
+            saveToStorage('orders', remoteOrders);
+          }
+        }),
+      ]).finally(() => {
+        setIsLoading(false);
+        setIsSyncing(false);
       });
     };
 
@@ -321,6 +331,8 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateOrderStatus,
         deleteOrder,
         activeKitchenOrders,
+        isLoading,
+        isSyncing,
       }}
     >
       {children}

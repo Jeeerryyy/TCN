@@ -38,6 +38,8 @@ interface TableContextType {
   checkInBooking: (bookingId: string) => boolean;
   clearAllBookings: () => void;
   tickCounter: number; // Incrementing counter every second to drive live timers
+  isLoading: boolean;
+  isSyncing: boolean;
 }
 
 const TableContext = createContext<TableContextType | undefined>(undefined);
@@ -55,6 +57,9 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loadFromStorage('bookings', INITIAL_BOOKINGS)
   );
 
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
   // Heartbeat ticker for synchronized timer updates
   const [tickCounter, setTickCounter] = useState(0);
 
@@ -71,22 +76,26 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const unsubRealtime = dbService.initRealtimeSubscription();
 
     const syncFromCloud = () => {
-      dbService.fetchTables().then((remoteTables) => {
-        if (remoteTables && remoteTables.length > 0) {
-          setTables(remoteTables);
-        }
-      });
-
-      dbService.fetchSessions().then((remoteSessions) => {
-        if (remoteSessions) {
-          setSessions(remoteSessions);
-        }
-      });
-
-      dbService.fetchBookings().then((remoteBookings) => {
-        if (remoteBookings) {
-          setBookings(remoteBookings);
-        }
+      setIsSyncing(true);
+      Promise.all([
+        dbService.fetchTables().then((remoteTables) => {
+          if (remoteTables && remoteTables.length > 0) {
+            setTables(remoteTables);
+          }
+        }),
+        dbService.fetchSessions().then((remoteSessions) => {
+          if (remoteSessions) {
+            setSessions(remoteSessions);
+          }
+        }),
+        dbService.fetchBookings().then((remoteBookings) => {
+          if (remoteBookings) {
+            setBookings(remoteBookings);
+          }
+        }),
+      ]).finally(() => {
+        setIsLoading(false);
+        setIsSyncing(false);
       });
     };
 
@@ -518,6 +527,8 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         checkInBooking,
         clearAllBookings,
         tickCounter,
+        isLoading,
+        isSyncing,
       }}
     >
       {children}

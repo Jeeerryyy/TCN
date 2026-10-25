@@ -6,6 +6,7 @@ import { useTables } from '../../context/TableContext';
 import { Button } from '../../components/ui/Button';
 import { formatINR } from '../../utils/formatters';
 import { ShoppingBag, Plus, Minus, Trash2, Send, UtensilsCrossed, AlertCircle } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 export const OrderCart: React.FC = () => {
   const {
@@ -23,6 +24,7 @@ export const OrderCart: React.FC = () => {
   } = useCafe();
 
   const { tables, activeSessionsMap } = useTables();
+  const { warning, success } = useToast();
   const [orderSentMessage, setOrderSentMessage] = useState<string | null>(null);
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -35,12 +37,13 @@ export const OrderCart: React.FC = () => {
     if (cart.length === 0) return;
 
     if (cartDestination === 'table' && !selectedTableId) {
-      alert('Please select an active table to link this order.');
+      warning('Please select an active table to link this order.', 'Table Required');
       return;
     }
 
     const created = submitCartOrder();
     if (created) {
+      success(`KOT #${created.orderNumber} sent to kitchen.`, 'Order Dispatched');
       setOrderSentMessage(`KOT #${created.orderNumber} dispatched to Kitchen.`);
       setTimeout(() => setOrderSentMessage(null), 4000);
     }

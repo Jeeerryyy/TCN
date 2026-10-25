@@ -105,3 +105,25 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Hardware-Accelerated Shimmer Wave Animation */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(228, 230, 238, 0.6) 0%,
+    rgba(246, 247, 252, 0.95) 50%,
+    rgba(228, 230, 238, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: background-position;
+}

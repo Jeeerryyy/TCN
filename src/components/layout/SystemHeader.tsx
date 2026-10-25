@@ -1,7 +1,7 @@
 /* Brex Design System – Fintech Modern, High-Contrast, Inter Typography */
 
 import React, { useState, useEffect } from 'react';
-import { Clock, ShieldCheck, UserCheck, Lock, Menu, X, RefreshCw } from 'lucide-react';
+import { Clock, ShieldCheck, UserCheck, Lock, Menu, X, RefreshCw, UploadCloud } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { useTables } from '../../context/TableContext';
 import { useCafe } from '../../context/CafeContext';
@@ -23,12 +23,19 @@ export const SystemHeader: React.FC<SystemHeaderProps> = ({
   const [timeString, setTimeString] = useState('');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => dbService.getSyncStatus());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pendingQueueCount, setPendingQueueCount] = useState<number>(() => dbService.getPendingQueueCount());
 
   useEffect(() => {
     const unsub = dbService.onStatusChange((status) => {
       setSyncStatus(status);
     });
-    return () => unsub();
+    const unsubQueue = dbService.onQueueCountChange((count) => {
+      setPendingQueueCount(count);
+    });
+    return () => {
+      unsub();
+      unsubQueue();
+    };
   }, []);
 
   const handleManualSync = async () => {
@@ -141,6 +148,23 @@ export const SystemHeader: React.FC<SystemHeaderProps> = ({
               : 'Offline Cache'}
           </span>
         </div>
+
+        {/* Offline Mutations Pending Flusher */}
+        {pendingQueueCount > 0 && (
+          <button
+            type="button"
+            onClick={async () => {
+              setIsRefreshing(true);
+              await dbService.flushOfflineQueue();
+              setIsRefreshing(false);
+            }}
+            title="Pending offline changes waiting to sync with cloud. Click to sync immediately."
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-[#FF5900]/10 border border-[#FF5900]/30 text-[#FF5900] text-[11px] font-medium hover:bg-[#FF5900]/20 transition-colors animate-pulse"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>{pendingQueueCount} Offline Queued</span>
+          </button>
+        )}
 
         {/* Manual Cloud Refresh Button */}
         <button
