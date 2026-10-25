@@ -4,9 +4,9 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v3.2.0-cloud-menu-sync';
+const CURRENT_STORAGE_VERSION = 'v4.0.0-clean-slate';
 
-// Purge legacy ephemeral/menu cache keys so old local mock food items never resurrect on client devices
+// Purge legacy local cache so client devices open with a 100% clean slate synced with Supabase
 const KEYS_TO_PURGE = [
   'tcn_tcn_bookings',
   'tcn_current_user',
@@ -14,6 +14,14 @@ const KEYS_TO_PURGE = [
   'tcn_menu',
   'menu_items',
   'tcn_menu_items',
+  'bills',
+  'tcn_bills',
+  'orders',
+  'tcn_orders',
+  'sessions',
+  'tcn_sessions',
+  'bookings',
+  'tcn_bookings',
 ];
 
 // Automatically purge legacy temporary cache keys on version upgrade
