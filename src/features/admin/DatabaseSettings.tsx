@@ -20,6 +20,8 @@ import {
   Zap,
   Trash2,
   Save,
+  FileCode,
+  ExternalLink,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 
@@ -228,6 +230,44 @@ export const DatabaseSettings: React.FC = () => {
             </div>
           )}
         </form>
+      </div>
+
+      {/* Supabase Cloud Project & Schema Card */}
+      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 sm:p-6 space-y-4 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#B9BBC6] gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-[6px] shrink-0 bg-[#006EF5]/10 text-[#006EF5] flex items-center justify-center">
+              <FileCode className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-medium text-[#000000]">
+                Connected Cloud Project: <span className="font-mono text-[#006EF5]">ruzdhrnltaftxtkgymtk</span>
+              </div>
+              <div className="text-xs text-[#60646C]">
+                PostgreSQL schema setup script is prepared in <span className="font-mono text-[#15191E]">supabase/full_schema_setup.sql</span>
+              </div>
+            </div>
+          </div>
+
+          <a
+            href="https://supabase.com/dashboard/project/ruzdhrnltaftxtkgymtk/sql/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-[44px] sm:h-[36px] px-3.5 rounded-[6px] border border-[#006EF5] bg-[#006EF5]/[0.06] hover:bg-[#006EF5]/[0.12] text-xs font-medium text-[#006EF5] transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <span>Open Supabase SQL Editor</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+
+        <div className="text-xs text-[#60646C] space-y-1.5 bg-[#F3F3F7] p-3 rounded-[6px] border border-[#B9BBC6]">
+          <div className="font-semibold text-[#15191E]">Quick 1-Click Sync Instructions:</div>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>Click <strong>Open Supabase SQL Editor</strong> above.</li>
+            <li>Copy and paste the contents of <span className="font-mono text-[#15191E]">supabase/full_schema_setup.sql</span>.</li>
+            <li>Click <strong>Run</strong> in Supabase. All tables, RLS policies, and realtime publications will instantly be created!</li>
+          </ol>
+        </div>
       </div>
 
       {/* Data Hygiene & Sanitization Utility Card */}

@@ -4,7 +4,7 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v2.5.0-clean-live-bookings';
+const CURRENT_STORAGE_VERSION = 'v2.6.0-clean-live-db';
 
 const KEYS_TO_PURGE = [
   'tables',
@@ -15,7 +15,9 @@ const KEYS_TO_PURGE = [
   'bills',
   'orders',
   'customers',
+  'tcn_customers',
   'wallet_txns',
+  'tcn_wallet_txns',
   'menu',
   'tcn_current_user',
 ];
@@ -68,6 +70,22 @@ export function clearBookingsStorage(): void {
   }
 }
 
+export function clearCustomersStorage(): void {
+  try {
+    localStorage.removeItem('customers');
+    localStorage.removeItem('tcn_customers');
+    localStorage.removeItem('wallet_txns');
+    localStorage.removeItem('tcn_wallet_txns');
+  } catch (e) {
+    console.warn('[TCN Storage] Error clearing customers storage:', e);
+  }
+}
+
+export function clearAllCustomersAndBookings(): void {
+  clearBookingsStorage();
+  clearCustomersStorage();
+}
+
 export function clearAllStorageData(): void {
   try {
     KEYS_TO_PURGE.forEach((key) => {
@@ -79,4 +97,5 @@ export function clearAllStorageData(): void {
     console.error('[TCN Storage] Error clearing storage data:', e);
   }
 }
+
 

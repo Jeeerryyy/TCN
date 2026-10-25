@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Customer, WalletTransaction, MembershipTier } from '../types/customer.types';
 import { INITIAL_CUSTOMERS } from '../data/initialCustomers';
-import { loadFromStorage, saveToStorage } from '../utils/storage';
+import { loadFromStorage, saveToStorage, clearCustomersStorage } from '../utils/storage';
 import { dbService } from '../services/db';
 
 interface AddCustomerInput {
@@ -24,6 +24,7 @@ interface CustomerContextType {
   updateCustomer: (id: string, updates: Partial<Customer>) => void;
   topUpWallet: (customerId: string, amount: number, notes?: string) => void;
   deductWallet: (customerId: string, amount: number, billId: string) => boolean;
+  clearAllCustomers: () => void;
   walletTransactions: WalletTransaction[];
 }
 
@@ -157,6 +158,12 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return true;
   };
 
+  const clearAllCustomers = () => {
+    setCustomers([]);
+    setWalletTransactions([]);
+    clearCustomersStorage();
+  };
+
   return (
     <CustomerContext.Provider
       value={{
@@ -170,6 +177,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updateCustomer,
         topUpWallet,
         deductWallet,
+        clearAllCustomers,
         walletTransactions,
       }}
     >

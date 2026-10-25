@@ -9,10 +9,18 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { formatINR } from '../../utils/formatters';
 import { CustomerDetailModal } from './CustomerDetailModal';
-import { Users, UserPlus, Wallet, Phone } from 'lucide-react';
+import { Users, UserPlus, Wallet, Phone, Trash2 } from 'lucide-react';
 
 export const CustomerList: React.FC = () => {
-  const { filteredCustomers, searchQuery, setSearchQuery, addCustomer, topUpWallet } = useCustomers();
+  const {
+    customers,
+    filteredCustomers,
+    searchQuery,
+    setSearchQuery,
+    addCustomer,
+    topUpWallet,
+    clearAllCustomers,
+  } = useCustomers();
 
   const [activeDetailCustomer, setActiveDetailCustomer] = useState<Customer | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -86,15 +94,32 @@ export const CustomerList: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => setIsAddModalOpen(true)}
-          icon={<UserPlus className="w-4 h-4" />}
-          className="w-full sm:w-auto h-[44px] sm:h-auto"
-        >
-          Register New Member
-        </Button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {customers.length > 0 && (
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                if (confirm('Clear all customer records and wallet balances? This will reset the customer directory so you can start completely clean.')) {
+                  clearAllCustomers();
+                }
+              }}
+              icon={<Trash2 className="w-4 h-4 text-[#FF3D00]" />}
+              className="text-[#FF3D00] hover:text-[#D9381E] border-[#B9BBC6]"
+            >
+              Clear All Customers
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setIsAddModalOpen(true)}
+            icon={<UserPlus className="w-4 h-4" />}
+            className="w-full sm:w-auto h-[44px] sm:h-auto"
+          >
+            Register New Member
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -108,7 +133,24 @@ export const CustomerList: React.FC = () => {
       </div>
 
       {/* Customer Directory Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {filteredCustomers.length === 0 ? (
+        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-12 text-center shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+          <Users className="w-10 h-10 mx-auto mb-3 text-[#8B8D98] opacity-50" />
+          <h4 className="text-[16px] font-medium text-[#000000]">No Customer Records</h4>
+          <p className="text-[13px] text-[#60646C] max-w-md mx-auto mt-1 mb-4">
+            Your member directory is clean and ready for live customers. Register a new member profile or add walk-in players during billing.
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsAddModalOpen(true)}
+            icon={<UserPlus className="w-4 h-4" />}
+          >
+            Register First Member
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCustomers.map((cust) => (
           <div
             key={cust.id}
@@ -178,7 +220,8 @@ export const CustomerList: React.FC = () => {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Add Customer Modal */}
       <Modal
