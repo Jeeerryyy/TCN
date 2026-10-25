@@ -4,7 +4,7 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v2.6.0-clean-live-db';
+const CURRENT_STORAGE_VERSION = 'v2.8.0-clean-production-sync';
 
 const KEYS_TO_PURGE = [
   'tables',
@@ -67,6 +67,15 @@ export function clearBookingsStorage(): void {
     localStorage.removeItem('tcn_tcn_bookings');
   } catch (e) {
     console.warn('[TCN Storage] Error clearing bookings storage:', e);
+  }
+}
+
+export function clearBillsStorage(): void {
+  try {
+    localStorage.removeItem('bills');
+    localStorage.removeItem('tcn_bills');
+  } catch (e) {
+    console.warn('[TCN Storage] Error clearing bills storage:', e);
   }
 }
 

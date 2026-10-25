@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Bill, BillLineItem, PaymentMethod, SplitPaymentShare } from '../types/billing.types';
 import { INITIAL_BILLS } from '../data/mockBills';
-import { loadFromStorage, saveToStorage } from '../utils/storage';
+import { loadFromStorage, saveToStorage, clearBillsStorage } from '../utils/storage';
 import { useTables } from './TableContext';
 import { useCafe } from './CafeContext';
 import { useCustomers } from './CustomerContext';
@@ -23,6 +23,9 @@ interface BillingContextType {
   bills: Bill[];
   settleTableBill: (options: SettleSessionOptions) => Bill | null;
   settleQuickCafeBill: (orderId: string, paymentMethod: PaymentMethod) => Bill | null;
+  deleteBill: (billId: string) => Promise<void>;
+  clearAllBills: () => Promise<void>;
+  refreshBills: () => Promise<void>;
   getPendingFolioForTable: (tableId: string) => {
     tableCharge: number;
     billedMinutes: number;
@@ -55,22 +58,30 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     // Fetch initial bills from cloud on mount
     dbService.fetchBills().then((remoteBills) => {
-      if (remoteBills && remoteBills.length > 0) {
+      if (remoteBills !== null) {
         setBills(remoteBills);
       }
     });
 
-    // Listen to live bill settlements (Staff POS settlements streaming to Admin)
-    const unsubBill = dbService.onBillChange((bill) => {
-      setBills((prev) => {
-        const idx = prev.findIndex((b) => b.id === bill.id);
-        if (idx > -1) {
-          const next = [...prev];
-          next[idx] = bill;
-          return next;
+    // Listen to live bill settlements and deletions (Staff POS settlements streaming to Admin)
+    const unsubBill = dbService.onBillChange((bill, action) => {
+      if (action === 'DELETE') {
+        if (bill.id === '__ALL__') {
+          setBills([]);
+        } else {
+          setBills((prev) => prev.filter((b) => b.id !== bill.id));
         }
-        return [bill, ...prev];
-      });
+      } else {
+        setBills((prev) => {
+          const idx = prev.findIndex((b) => b.id === bill.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = bill;
+            return next;
+          }
+          return [bill, ...prev];
+        });
+      }
     });
 
     return () => {
@@ -294,12 +305,34 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return bill;
   };
 
+  const refreshBills = async () => {
+    const remote = await dbService.fetchBills();
+    if (remote !== null) {
+      setBills(remote);
+      saveToStorage('bills', remote);
+    }
+  };
+
+  const deleteBill = async (billId: string) => {
+    setBills((prev) => prev.filter((b) => b.id !== billId));
+    await dbService.deleteBillRemote(billId);
+  };
+
+  const clearAllBills = async () => {
+    setBills([]);
+    clearBillsStorage();
+    await dbService.clearAllBillsRemote();
+  };
+
   return (
     <BillingContext.Provider
       value={{
         bills,
         settleTableBill,
         settleQuickCafeBill,
+        deleteBill,
+        clearAllBills,
+        refreshBills,
         getPendingFolioForTable,
         activeBillModal,
         setActiveBillModal,

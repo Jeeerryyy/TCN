@@ -511,6 +511,28 @@ export const dbService = {
     }
   },
 
+  async deleteBillRemote(billId: string): Promise<void> {
+    broadcastLocally('bill', { id: billId } as Bill, 'DELETE');
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    try {
+      await supabase.from('bills').delete().eq('id', billId);
+    } catch (e) {
+      console.warn('[DB Sync] Bill delete deferred:', e);
+    }
+  },
+
+  async clearAllBillsRemote(): Promise<void> {
+    broadcastLocally('bill', { id: '__ALL__' } as Bill, 'DELETE');
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+    try {
+      await supabase.from('bills').delete().neq('id', 'non_existent_key');
+    } catch (e) {
+      console.warn('[DB Sync] Clear bills deferred:', e);
+    }
+  },
+
   // --- CUSTOMERS WRITE & SYNC ---
   async syncCustomer(customer: Customer): Promise<void> {
     broadcastLocally('customer', customer, 'UPDATE');

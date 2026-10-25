@@ -58,22 +58,26 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Fetch initial cafe orders from cloud on mount
     dbService.fetchOrders().then((remoteOrders) => {
-      if (remoteOrders && remoteOrders.length > 0) {
+      if (remoteOrders !== null) {
         setOrders(remoteOrders);
       }
     });
 
     // Listen to live cafe orders (Staff counter/table orders streaming to KDS and Admin)
-    const unsubOrder = dbService.onOrderChange((order) => {
-      setOrders((prev) => {
-        const idx = prev.findIndex((o) => o.id === order.id);
-        if (idx > -1) {
-          const next = [...prev];
-          next[idx] = order;
-          return next;
-        }
-        return [order, ...prev];
-      });
+    const unsubOrder = dbService.onOrderChange((order, action) => {
+      if (action === 'DELETE') {
+        setOrders((prev) => prev.filter((o) => o.id !== order.id));
+      } else {
+        setOrders((prev) => {
+          const idx = prev.findIndex((o) => o.id === order.id);
+          if (idx > -1) {
+            const next = [...prev];
+            next[idx] = order;
+            return next;
+          }
+          return [order, ...prev];
+        });
+      }
     });
 
     return () => {
