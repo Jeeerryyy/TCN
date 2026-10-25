@@ -31,6 +31,27 @@ CREATE TABLE IF NOT EXISTS public.game_tables (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Ensure all extended columns exist even if game_tables was created with an older schema
+ALTER TABLE public.game_tables ADD COLUMN IF NOT EXISTS short_code text;
+ALTER TABLE public.game_tables ADD COLUMN IF NOT EXISTS min_minutes numeric DEFAULT 60;
+ALTER TABLE public.game_tables ADD COLUMN IF NOT EXISTS current_session_id text;
+ALTER TABLE public.game_tables ADD COLUMN IF NOT EXISTS location_zone text;
+
+-- Seed the venue's complete 6 cue tables (Pool 1-3 & Snooker 1-3)
+INSERT INTO public.game_tables (id, name, short_code, type, status, rate_per_hour, min_minutes, size, cloth_color, location_zone)
+VALUES 
+  ('tbl_p1', 'Pool Table 1', 'P1', 'pool', 'available', 180, 60, '8 ft English Pool', 'Tournament Green', 'Main Hall'),
+  ('tbl_p2', 'Pool Table 2', 'P2', 'pool', 'available', 180, 60, '8 ft English Pool', 'Tournament Green', 'Main Hall'),
+  ('tbl_p3', 'Pool Table 3', 'P3', 'pool', 'available', 180, 60, '8 ft English Pool', 'Tournament Green', 'VIP Arena'),
+  ('tbl_s1', 'Snooker Table 1', 'S1', 'snooker', 'available', 300, 60, '12 ft Championship Riley', 'Strachan 6811 English Green', 'Snooker Hall'),
+  ('tbl_s2', 'Snooker Table 2', 'S2', 'snooker', 'available', 300, 60, '12 ft Tournament Wiraka', 'Strachan 6811 English Green', 'Snooker Hall'),
+  ('tbl_s3', 'Snooker Table 3', 'S3', 'snooker', 'available', 300, 60, '12 ft Tournament Riley', 'Strachan 6811 English Green', 'Snooker Hall')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  type = EXCLUDED.type,
+  size = EXCLUDED.size,
+  cloth_color = EXCLUDED.cloth_color;
+
 -- ====================================================================
 -- 3. GAME SESSIONS TABLE (Live Session Timers & Players)
 -- ====================================================================

@@ -231,17 +231,41 @@ export const dbService = {
 
       if (!data || data.length === 0) {
         // Auto-seed cloud database with venue's default 6 cue tables
-        console.log('[DB Sync] Empty cloud tables detected, seeding default tables...');
+        console.log('[DB Sync] Empty cloud tables detected, seeding default 6 tables...');
         for (const tbl of INITIAL_TABLES) {
           await this.syncTable(tbl);
         }
-        notifyStatus('connected', 'Default tables seeded to cloud');
+        notifyStatus('connected', 'All 6 default tables seeded to cloud');
         return INITIAL_TABLES;
       }
 
-      const tables = data.map(mapRowToTable);
-      notifyStatus('connected', 'Tables synced with cloud');
-      return tables;
+      const fetchedTables = data.map(mapRowToTable);
+
+      // Verify that all 6 standard venue tables (3 Pool, 3 Snooker) exist
+      const existingIds = new Set(fetchedTables.map((t) => t.id));
+      const missingTables = INITIAL_TABLES.filter((t) => !existingIds.has(t.id));
+
+      if (missingTables.length > 0) {
+        console.log(`[DB Sync] ${missingTables.length} standard tables missing in cloud. Seeding missing tables...`);
+        for (const tbl of missingTables) {
+          await this.syncTable(tbl);
+          fetchedTables.push(tbl);
+        }
+      }
+
+      // Sort tables in canonical venue order: Pool 1-3, Snooker 1-3
+      const orderMap: Record<string, number> = {
+        tbl_p1: 1,
+        tbl_p2: 2,
+        tbl_p3: 3,
+        tbl_s1: 4,
+        tbl_s2: 5,
+        tbl_s3: 6,
+      };
+      fetchedTables.sort((a, b) => (orderMap[a.id] || 99) - (orderMap[b.id] || 99));
+
+      notifyStatus('connected', `${fetchedTables.length} tables synced with cloud`);
+      return fetchedTables;
     } catch (e) {
       console.warn('[DB Sync] Tables fetch exception:', e);
       notifyStatus('connected', 'Using cached tables');
@@ -335,7 +359,7 @@ export const dbService = {
     const supabase = getSupabaseClient();
     if (!supabase) return;
     try {
-      await supabase.from('game_tables').upsert({
+      const { error } = await supabase.from('game_tables').upsert({
         id: table.id,
         name: table.name,
         short_code: table.shortCode,
@@ -348,6 +372,19 @@ export const dbService = {
         current_session_id: table.currentSessionId || null,
         location_zone: table.locationZone || null,
       });
+
+      if (error && (error.code === 'PGRST204' || error.message.includes('column'))) {
+        // Fallback for minimal table schema without extended columns
+        await supabase.from('game_tables').upsert({
+          id: table.id,
+          name: table.name,
+          type: table.type,
+          status: table.status,
+          rate_per_hour: table.ratePerHour,
+          size: table.size,
+          cloth_color: table.clothColor,
+        });
+      }
     } catch (e) {
       console.warn('[DB Sync] Table upsert deferred:', e);
     }
