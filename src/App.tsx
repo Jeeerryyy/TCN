@@ -23,6 +23,7 @@ import { CustomerList } from './features/crm/CustomerList';
 import { TransactionHistory } from './features/billing/TransactionHistory';
 import { RevenueReports } from './features/reports/RevenueReports';
 import { DatabaseSettings } from './features/admin/DatabaseSettings';
+import { ReceiptSettings } from './features/admin/ReceiptSettings';
 import { ShieldAlert } from 'lucide-react';
 
 export const AppContent: React.FC = () => {
@@ -63,6 +64,13 @@ export const AppContent: React.FC = () => {
       {currentTab === 'reports' && (
         isAdmin ? (
           <RevenueReports />
+        ) : (
+          <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
+        )
+      )}
+      {currentTab === 'receipt-settings' && (
+        isAdmin ? (
+          <ReceiptSettings />
         ) : (
           <AccessDeniedNotice onGoBack={() => setCurrentTab('dashboard')} />
         )

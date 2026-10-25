@@ -9,6 +9,7 @@ import { useBilling } from '../../context/BillingContext';
 import { useCustomers } from '../../context/CustomerContext';
 import { useTables } from '../../context/TableContext';
 import { formatINR, formatTimeOnly } from '../../utils/formatters';
+import { getReceiptConfig } from '../../utils/receiptStorage';
 import { CreditCard, Banknote, QrCode, Wallet, Split, Tag, Check } from 'lucide-react';
 
 interface SettleBillModalProps {
@@ -64,13 +65,14 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
       ];
     }
 
+    const receiptConfig = getReceiptConfig();
     const bill = settleTableBill({
       tableId: table.id,
       paymentMethod,
       splitShares,
       customDiscountAmount: customDiscount || undefined,
       discountReason: discountReason || undefined,
-      cashierName: 'Duty Cashier',
+      cashierName: receiptConfig.defaultCashierName || 'Duty Cashier',
     });
 
     if (bill) {

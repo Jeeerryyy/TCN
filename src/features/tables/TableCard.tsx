@@ -185,18 +185,19 @@ export const TableCard: React.FC<TableCardProps> = ({
 
                   <div className="flex flex-col text-right">
                     <span className="text-[9px] uppercase font-semibold text-[#60646C] tracking-wider">
-                      {session.status === 'paused' || session.endTime ? 'End Time (Ended)' : 'End Time (Live)'}
+                      End Time
                     </span>
-                    <span
-                      className={`font-semibold text-[12px] ${
-                        session.status === 'paused' || session.endTime ? 'text-[#FF5900]' : 'text-[#0D9926]'
-                      }`}
-                    >
-                      {session.endTime
-                        ? formatTimeOnly(session.endTime)
-                        : session.status === 'paused' && session.pausedAt
-                        ? formatTimeOnly(session.pausedAt)
-                        : formatTimeOnly(new Date().toISOString())}
+                    <span className="font-semibold text-[12px]">
+                      {session.endTime ? (
+                        <span className="text-[#FF5900]">{formatTimeOnly(session.endTime)}</span>
+                      ) : session.status === 'paused' && session.pausedAt ? (
+                        <span className="text-[#FF5900]">Paused ({formatTimeOnly(session.pausedAt)})</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-[#0D9926]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#0D9926] animate-pulse"></span>
+                          In Progress
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>

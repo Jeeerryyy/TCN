@@ -12,6 +12,7 @@ import {
   Receipt,
   BarChart3,
   Database,
+  Printer,
   Shield,
   LogOut,
   X,
@@ -31,6 +32,7 @@ export type ActiveNavTab =
   | 'crm'
   | 'billing'
   | 'reports'
+  | 'receipt-settings'
   | 'database';
 
 interface SidebarNavProps {
@@ -149,6 +151,12 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       id: 'reports' as const,
       label: 'Shift Revenue Audit',
       icon: BarChart3,
+      adminBadge: true,
+    },
+    {
+      id: 'receipt-settings' as const,
+      label: 'Receipt Template',
+      icon: Printer,
       adminBadge: true,
     },
     {
