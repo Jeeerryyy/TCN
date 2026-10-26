@@ -77,7 +77,7 @@ export const SystemHeader: React.FC<SystemHeaderProps> = ({
   const occupiedCount = tables.filter((t) => t.status === 'occupied').length;
 
   return (
-    <header className="sticky top-0 z-[1000] h-[60px] bg-[#FFFFFF] border-b border-[#B9BBC6] px-3 sm:px-6 flex items-center justify-between shrink-0 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] select-none">
+    <header className="sticky top-0 z-[1000] min-h-[60px] h-[calc(60px+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] bg-[#FFFFFF] border-b border-[#B9BBC6] px-3 sm:px-6 flex items-center justify-between shrink-0 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] select-none">
       {/* Left: Branding & Status (Brex Action Orange Accent) */}
       <div className="flex items-center gap-2 sm:gap-4">
         {onToggleMobileMenu && (

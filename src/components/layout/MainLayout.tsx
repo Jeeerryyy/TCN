@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { SystemHeader } from './SystemHeader';
 import { SidebarNav, ActiveNavTab } from './SidebarNav';
+import { PWAInstallPrompt } from '../ui/PWAInstallPrompt';
 import { LayoutDashboard, Grid, Coffee, ChefHat, Menu } from 'lucide-react';
 import { useCafe } from '../../context/CafeContext';
 import { useTables } from '../../context/TableContext';
@@ -30,6 +31,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         onToggleMobileMenu={() => setIsMobileNavOpen(!isMobileNavOpen)}
         isMobileMenuOpen={isMobileNavOpen}
       />
+
+      {/* PWA & iOS Install Banner */}
+      <PWAInstallPrompt />
 
       {/* Main Body with Sidebar */}
       <div className="flex flex-1 overflow-hidden relative">
