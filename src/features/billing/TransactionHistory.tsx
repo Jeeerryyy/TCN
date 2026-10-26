@@ -7,16 +7,41 @@ import { formatINR, formatDateTime } from '../../utils/formatters';
 import { Bill } from '../../types/billing.types';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { ManualNotebookEntryModal } from './ManualNotebookEntryModal';
-import { Button } from '../../components/ui/Button';
-import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen } from 'lucide-react';
+import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen, Phone, Pencil, User, Check } from 'lucide-react';
 import { TransactionHistorySkeleton } from '../../components/ui/Skeleton';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 
 export const TransactionHistory: React.FC = () => {
-  const { bills, deleteBill, clearAllBills, refreshBills, isLoading } = useBilling();
+  const { bills, deleteBill, clearAllBills, refreshBills, updateBillDetails, isLoading } = useBilling();
   const [search, setSearch] = useState('');
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  // Edit customer & phone state for any bill
+  const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerPhone, setEditCustomerPhone] = useState('');
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+
+  const handleOpenEditCustomer = (bill: Bill) => {
+    setEditingBill(bill);
+    setEditCustomerName(bill.customerName);
+    setEditCustomerPhone(bill.customerPhone || '');
+  };
+
+  const handleSaveCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBill) return;
+    setIsSavingCustomer(true);
+    await updateBillDetails(editingBill.id, {
+      customerName: editCustomerName.trim() || editingBill.customerName,
+      customerPhone: editCustomerPhone.trim(),
+    });
+    setIsSavingCustomer(false);
+    setEditingBill(null);
+  };
 
   if (isLoading && bills.length === 0) {
     return <TransactionHistorySkeleton />;
@@ -167,8 +192,27 @@ export const TransactionHistory: React.FC = () => {
                           </span>
                         )}
                       </div>
+                      {/* Customer Phone Display */}
+                      <div className="mt-1 flex items-center gap-1">
+                        {bill.customerPhone ? (
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-[#006EF5] font-semibold bg-[#D5E8FB]/70 px-1.5 py-0.5 rounded border border-[#006EF5]/20">
+                            <Phone className="w-3 h-3 text-[#006EF5]" />
+                            {bill.customerPhone}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCustomer(bill)}
+                            className="inline-flex items-center gap-1 text-[11px] text-[#FF5900] hover:underline font-mono"
+                            title="Click to add phone number"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>+ Add Phone</span>
+                          </button>
+                        )}
+                      </div>
                       {bill.tableName && (
-                        <div className="text-[11px] text-[#006EF5] font-medium">{bill.tableName}</div>
+                        <div className="text-[11px] text-[#60646C] font-medium mt-0.5">{bill.tableName}</div>
                       )}
                       {bill.notes && (
                         <div className="text-[10px] text-[#8B8D98] truncate max-w-[200px]" title={bill.notes}>
@@ -197,6 +241,14 @@ export const TransactionHistory: React.FC = () => {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditCustomer(bill)}
+                          className="w-8 h-8 rounded-[6px] bg-[#F3F3F7] border border-[#B9BBC6] hover:bg-[#FFFFFF] inline-flex items-center justify-center text-[#60646C] hover:text-[#006EF5] transition-colors"
+                          title="Edit Customer Name & Phone Number"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setPreviewBill(bill)}
@@ -245,6 +297,75 @@ export const TransactionHistory: React.FC = () => {
           }
         }}
       />
+
+      {/* Edit Customer & Phone Modal */}
+      {editingBill && (
+        <Modal
+          isOpen={!!editingBill}
+          onClose={() => setEditingBill(null)}
+          title={`Edit Booking Details · ${editingBill.invoiceNumber}`}
+          subtitle="Update customer details and mobile number for this registered booking"
+          maxWidth="sm"
+        >
+          <form onSubmit={handleSaveCustomer} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-[#15191E] mb-1">
+                Customer / Player Name *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 w-4 h-4 text-[#8B8D98]" />
+                <input
+                  type="text"
+                  required
+                  value={editCustomerName}
+                  onChange={(e) => setEditCustomerName(e.target.value)}
+                  placeholder="Enter customer name"
+                  className="w-full h-[40px] bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] pl-9 pr-3 text-sm text-[#15191E] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-[#15191E] mb-1">
+                Customer Mobile / Phone Number
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 w-4 h-4 text-[#8B8D98]" />
+                <input
+                  type="tel"
+                  value={editCustomerPhone}
+                  onChange={(e) => setEditCustomerPhone(e.target.value)}
+                  placeholder="e.g. 9876543210"
+                  className="w-full h-[40px] bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] pl-9 pr-3 text-sm text-[#15191E] font-mono focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)]"
+                />
+              </div>
+              <p className="text-[11px] text-[#60646C] mt-1">
+                This updates the customer contact details on this booking in the register and receipt.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-[#B9BBC6]">
+              <Button
+                variant="secondary"
+                size="md"
+                type="button"
+                onClick={() => setEditingBill(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                type="submit"
+                disabled={isSavingCustomer}
+                icon={<Check className="w-4 h-4" />}
+              >
+                {isSavingCustomer ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 };

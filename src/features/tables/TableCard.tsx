@@ -8,7 +8,7 @@ import { useTables } from '../../context/TableContext';
 import { useCafe } from '../../context/CafeContext';
 import { calculateElapsedSeconds, calculateSessionCharge } from '../../utils/timer';
 import { formatDurationHMS, formatINR, formatTimeOnly } from '../../utils/formatters';
-import { Play, Pause, ArrowRightLeft, Utensils, CreditCard, User, AlertCircle } from 'lucide-react';
+import { Play, Pause, ArrowRightLeft, Utensils, User, AlertCircle, Phone, FileCheck } from 'lucide-react';
 
 interface TableCardProps {
   table: Table;
@@ -235,12 +235,22 @@ export const TableCard: React.FC<TableCardProps> = ({
               </div>
 
               {/* Players & Notes */}
-              <div className="space-y-1 text-xs">
-                <div className="flex items-center gap-2 text-[#15191E] font-medium truncate">
-                  <User className="w-3.5 h-3.5 text-[#60646C] shrink-0" />
-                  <span className="truncate">{session.primaryCustomerName}</span>
-                  {session.playersCount > 1 && (
-                    <span className="text-[11px] text-[#60646C]">+{session.playersCount - 1} more</span>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 text-[#15191E] font-medium truncate max-w-[65%]">
+                    <User className="w-3.5 h-3.5 text-[#FF5900] shrink-0" />
+                    <span className="truncate">{session.primaryCustomerName}</span>
+                    {session.playersCount > 1 && (
+                      <span className="text-[11px] text-[#60646C]">+{session.playersCount - 1}</span>
+                    )}
+                  </div>
+                  {session.primaryCustomerPhone ? (
+                    <div className="flex items-center gap-1 text-[11px] font-mono text-[#006EF5] font-semibold bg-[#D5E8FB]/70 px-1.5 py-0.5 rounded shrink-0 border border-[#006EF5]/20">
+                      <Phone className="w-3 h-3 text-[#006EF5]" />
+                      <span>{session.primaryCustomerPhone}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-[#8B8D98] italic font-mono">No phone</span>
                   )}
                 </div>
                 {session.notes && (
@@ -254,11 +264,17 @@ export const TableCard: React.FC<TableCardProps> = ({
             /* Vacant Table Info */
             <div className="py-2 text-center space-y-1">
               {activeBooking ? (
-                <div className="bg-[#FFF4ED] border border-[#FF5900]/30 rounded-[6px] p-2 text-left space-y-0.5">
+                <div className="bg-[#FFF4ED] border border-[#FF5900]/30 rounded-[6px] p-2 text-left space-y-1">
                   <div className="flex items-center justify-between text-xs font-semibold text-[#FF5900]">
-                    <span>Reserved for {activeBooking.customerName}</span>
+                    <span>Reserved: {activeBooking.customerName}</span>
                     <span className="font-mono text-[11px]">{activeBooking.startTime}</span>
                   </div>
+                  {activeBooking.customerPhone && (
+                    <div className="flex items-center gap-1 text-[11px] font-mono text-[#15191E]">
+                      <Phone className="w-3 h-3 text-[#FF5900]" />
+                      <span>{activeBooking.customerPhone}</span>
+                    </div>
+                  )}
                   <div className="text-[11px] text-[#60646C]">
                     Deposit: {formatINR(activeBooking.advanceDeposit)} · {activeBooking.durationMinutes}m ({activeBooking.playersCount} players)
                   </div>
@@ -272,7 +288,8 @@ export const TableCard: React.FC<TableCardProps> = ({
               {lastCompletedSession && (
                 <div className="mt-1.5 pt-1.5 border-t border-[#B9BBC6]/60 text-[11px] font-mono text-[#60646C] bg-[#F3F3F7] rounded-[6px] p-2 text-left">
                   <div className="text-[9px] uppercase font-semibold text-[#8B8D98] tracking-wider mb-0.5">
-                    Previous Session Proof ({lastCompletedSession.primaryCustomerName})
+                    Previous: {lastCompletedSession.primaryCustomerName}
+                    {lastCompletedSession.primaryCustomerPhone && ` (${lastCompletedSession.primaryCustomerPhone})`}
                   </div>
                   <div className="flex justify-between items-center text-[11px]">
                     <span>Start: <strong className="text-[#15191E]">{formatTimeOnly(lastCompletedSession.startTime)}</strong></span>
@@ -332,15 +349,20 @@ export const TableCard: React.FC<TableCardProps> = ({
                 </Button>
               </div>
 
-              {/* Settle Bill Primary Action (Brex Action Orange #FF5900) */}
+              {/* Stop Timer & Preview Bill Primary Action */}
               <Button
                 variant="primary"
                 size="md"
                 className="w-full"
-                onClick={() => onSettleBill(table)}
-                icon={<CreditCard className="w-4 h-4" />}
+                onClick={() => {
+                  if (session && session.status === 'active') {
+                    pauseSession(table.id);
+                  }
+                  onSettleBill(table);
+                }}
+                icon={<FileCheck className="w-4 h-4" />}
               >
-                Settle & Print Bill
+                Stop Timer & Preview Bill
               </Button>
             </div>
           ) : table.status === 'maintenance' ? (

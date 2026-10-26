@@ -39,7 +39,7 @@ export const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({
     const text = `${config.venueName}
 Invoice: ${bill.invoiceNumber}
 Date: ${formatDateTime(bill.settledAt || bill.createdAt)}
-Customer: ${bill.customerName}
+Customer: ${bill.customerName}${bill.customerPhone ? ` (${bill.customerPhone})` : ''}
 Table: ${bill.tableName || 'N/A'}${
       bill.sessionStartTime
         ? `\nStart Time: ${formatTimeOnly(bill.sessionStartTime)}\nEnd Time: ${formatTimeOnly(bill.sessionEndTime || bill.settledAt)}`
@@ -113,6 +113,12 @@ ${config.footerMessage1}`;
               <div className="flex justify-between items-baseline">
                 <span className="text-[#444444]">Customer:</span>
                 <span className="font-bold text-[#000000]">{bill.customerName}</span>
+              </div>
+            )}
+            {bill.customerPhone && (
+              <div className="flex justify-between items-baseline">
+                <span className="text-[#444444]">Phone:</span>
+                <span className="font-bold text-[#000000]">{bill.customerPhone}</span>
               </div>
             )}
             {bill.tableName && (

@@ -47,6 +47,15 @@ export function buildReceiptHtml(bill: Bill, customConfig?: Partial<ReceiptConfi
             : ''
         }
         ${
+          bill.customerPhone
+            ? `
+        <div class="meta-row">
+          <span class="meta-label">Phone:</span>
+          <span class="meta-val bold">${escapeHtml(bill.customerPhone)}</span>
+        </div>`
+            : ''
+        }
+        ${
           bill.tableName
             ? `
         <div class="meta-row">

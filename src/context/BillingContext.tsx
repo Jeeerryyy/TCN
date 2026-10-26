@@ -10,13 +10,17 @@ import { formatTimeOnly } from '../utils/formatters';
 import { MEMBERSHIP_BENEFITS } from '../data/initialCustomers';
 import { dbService } from '../services/db';
 
-interface SettleSessionOptions {
+export interface SettleSessionOptions {
   tableId: string;
   paymentMethod: PaymentMethod;
   splitShares?: SplitPaymentShare[];
   customDiscountAmount?: number;
   discountReason?: string;
   cashierName?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customItems?: { name: string; quantity: number; price: number }[];
+  tableChargeOverride?: number;
 }
 
 export interface ManualBillInput {
@@ -50,6 +54,10 @@ interface BillingContextType {
   deleteBill: (billId: string) => Promise<void>;
   clearAllBills: () => Promise<void>;
   refreshBills: () => Promise<void>;
+  updateBillDetails: (
+    billId: string,
+    updates: { customerName?: string; customerPhone?: string; notes?: string }
+  ) => Promise<void>;
   getPendingFolioForTable: (tableId: string) => {
     tableCharge: number;
     billedMinutes: number;
@@ -71,9 +79,35 @@ interface BillingContextType {
 const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { tables, activeSessionsMap, endSession } = useTables();
+  const { tables, activeSessionsMap, endSession, bookings } = useTables();
   const { orders, updateOrderStatus } = useCafe();
   const { customers, deductWallet, updateCustomer, addCustomer } = useCustomers();
+
+  // Helper to ensure customer phone numbers from bookings & CRM are synced to bills
+  const reconcileBillsWithBookings = (rawBills: Bill[]): Bill[] => {
+    return rawBills.map((b) => {
+      if (!b.customerPhone || b.customerPhone.trim() === '') {
+        const trimmedName = b.customerName.toLowerCase().trim();
+        // Check matching booking
+        const matchedBkg = bookings.find(
+          (bk) => bk.customerPhone && bk.customerName.toLowerCase().trim() === trimmedName
+        );
+        if (matchedBkg && matchedBkg.customerPhone) {
+          return { ...b, customerPhone: matchedBkg.customerPhone };
+        }
+        // Check CRM customer
+        const matchedCust = customers.find(
+          (c) =>
+            (b.customerId && c.id === b.customerId && c.phone) ||
+            (c.phone && c.name.toLowerCase().trim() === trimmedName)
+        );
+        if (matchedCust && matchedCust.phone) {
+          return { ...b, customerPhone: matchedCust.phone };
+        }
+      }
+      return b;
+    });
+  };
 
   const [bills, setBills] = useState<Bill[]>(() =>
     loadFromStorage('bills', INITIAL_BILLS)
@@ -90,8 +124,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .fetchBills()
         .then((remoteBills) => {
           if (remoteBills !== null) {
-            setBills(remoteBills);
-            saveToStorage('bills', remoteBills);
+            const reconciled = reconcileBillsWithBookings(remoteBills);
+            setBills(reconciled);
+            saveToStorage('bills', reconciled);
           }
         })
         .finally(() => {
@@ -130,8 +165,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           } else {
             next = [bill, ...prev];
           }
-          saveToStorage('bills', next);
-          return next;
+          const reconciled = reconcileBillsWithBookings(next);
+          saveToStorage('bills', reconciled);
+          return reconciled;
         });
       }
     });
@@ -140,7 +176,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       clearInterval(pollTimer);
       unsubBill();
     };
-  }, []);
+  }, [bookings]);
 
   useEffect(() => {
     saveToStorage('bills', bills);
@@ -213,9 +249,6 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   };
 
-  /**
-   * Finalizes table session, discharges table to available, marks orders billed, and creates Bill record
-   */
   const settleTableBill = (options: SettleSessionOptions): Bill | null => {
     const table = tables.find((t) => t.id === options.tableId);
     const session = activeSessionsMap[options.tableId];
@@ -224,10 +257,22 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const folio = getPendingFolioForTable(options.tableId);
     if (!folio) return null;
 
+    const effectiveTableCharge =
+      options.tableChargeOverride !== undefined ? options.tableChargeOverride : folio.tableCharge;
+
+    const cafeItemsToBill =
+      options.customItems !== undefined
+        ? options.customItems
+        : folio.cafeItems;
+
+    const effectiveCafeCharge = cafeItemsToBill.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+
+    const subtotal = effectiveTableCharge + effectiveCafeCharge;
     const discount = (options.customDiscountAmount || 0) + folio.tierDiscountAmount;
-    const taxableSubtotal = Math.max(0, folio.subtotal - discount);
-    const taxGstAmount = 0; // GST completely removed
-    const finalTotal = taxableSubtotal;
+    const finalTotal = Math.max(0, subtotal - discount);
 
     const sessionEndTime = session.endTime || session.pausedAt || new Date().toISOString();
     const invoiceNumber = `TCN-${new Date().getFullYear()}-${(bills.length + 1045).toString()}`;
@@ -241,10 +286,10 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         title: `${table.name} (${folio.billedHours} hr${folio.billedHours > 1 ? 's' : ''})`,
         subtitle: `Time: ${formatTimeOnly(session.startTime)} – ${formatTimeOnly(sessionEndTime)} (${folio.billedMinutes}m billed @ ₹${session.ratePerHour}/hr)`,
         quantity: 1,
-        unitPrice: folio.tableCharge,
-        totalPrice: folio.tableCharge,
+        unitPrice: effectiveTableCharge,
+        totalPrice: effectiveTableCharge,
       },
-      ...folio.cafeItems.map((item, idx) => ({
+      ...cafeItemsToBill.map((item, idx) => ({
         id: `li_${Date.now()}_cafe_${idx}`,
         type: 'cafe_item' as const,
         title: item.name,
@@ -263,6 +308,15 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
+    const finalCustomerName =
+      (options.customerName && options.customerName.trim()) ||
+      session.primaryCustomerName ||
+      'Walk-in Guest';
+    const finalCustomerPhone =
+      options.customerPhone !== undefined
+        ? options.customerPhone.trim() || undefined
+        : session.primaryCustomerPhone;
+
     const settledBill: Bill = {
       id: newBillId,
       invoiceNumber,
@@ -272,15 +326,15 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sessionStartTime: session.startTime,
       sessionEndTime: sessionEndTime,
       customerId: session.customerId,
-      customerName: session.primaryCustomerName,
-      customerPhone: session.primaryCustomerPhone,
+      customerName: finalCustomerName,
+      customerPhone: finalCustomerPhone,
       items: lineItems,
-      tableCharge: folio.tableCharge,
-      cafeCharge: folio.cafeCharge,
-      subtotal: folio.subtotal,
+      tableCharge: effectiveTableCharge,
+      cafeCharge: effectiveCafeCharge,
+      subtotal,
       discountAmount: discount,
       discountReason: options.discountReason || (folio.tierDiscountAmount > 0 ? 'Member Tier Privilege' : undefined),
-      taxGstAmount,
+      taxGstAmount: 0,
       finalTotal,
       status: 'settled',
       paymentMethod: options.paymentMethod,
@@ -290,7 +344,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       settledByStaff: options.cashierName || 'Floor Manager',
     };
 
-    // Update customer stats
+    // Update customer stats and phone if registered or new
     if (session.customerId) {
       const cust = customers.find((c) => c.id === session.customerId);
       if (cust) {
@@ -298,6 +352,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           totalVisits: cust.totalVisits + 1,
           totalSpent: cust.totalSpent + finalTotal,
           lastVisit: new Date().toISOString().split('T')[0],
+          phone: finalCustomerPhone || cust.phone,
         });
       }
     }
@@ -325,6 +380,33 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     dbService.syncBill(settledBill);
 
     return settledBill;
+  };
+
+  const updateBillDetails = async (
+    billId: string,
+    updates: { customerName?: string; customerPhone?: string; notes?: string }
+  ) => {
+    let targetBill: Bill | null = null;
+    setBills((prev) => {
+      const next = prev.map((b) => {
+        if (b.id === billId) {
+          targetBill = {
+            ...b,
+            customerName: updates.customerName !== undefined ? updates.customerName.trim() : b.customerName,
+            customerPhone: updates.customerPhone !== undefined ? (updates.customerPhone.trim() || undefined) : b.customerPhone,
+            notes: updates.notes !== undefined ? updates.notes.trim() : b.notes,
+          };
+          return targetBill;
+        }
+        return b;
+      });
+      saveToStorage('bills', next);
+      return next;
+    });
+
+    if (targetBill) {
+      await dbService.syncBill(targetBill);
+    }
   };
 
   /**
@@ -545,6 +627,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteBill,
         clearAllBills,
         refreshBills,
+        updateBillDetails,
         getPendingFolioForTable,
         activeBillModal,
         setActiveBillModal,
