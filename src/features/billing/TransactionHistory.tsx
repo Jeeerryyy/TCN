@@ -6,7 +6,9 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { formatINR, formatDateTime } from '../../utils/formatters';
 import { Bill } from '../../types/billing.types';
 import { InvoiceReceipt } from './InvoiceReceipt';
-import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw } from 'lucide-react';
+import { ManualNotebookEntryModal } from './ManualNotebookEntryModal';
+import { Button } from '../../components/ui/Button';
+import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen } from 'lucide-react';
 import { TransactionHistorySkeleton } from '../../components/ui/Skeleton';
 
 export const TransactionHistory: React.FC = () => {
@@ -14,6 +16,7 @@ export const TransactionHistory: React.FC = () => {
   const [search, setSearch] = useState('');
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   if (isLoading && bills.length === 0) {
     return <TransactionHistorySkeleton />;
@@ -75,6 +78,15 @@ export const TransactionHistory: React.FC = () => {
               {formatINR(totalSettledRevenue)}
             </span>
           </div>
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => setIsManualModalOpen(true)}
+            icon={<BookOpen className="w-4 h-4" />}
+          >
+            + Notebook Entry
+          </Button>
 
           <button
             type="button"
@@ -147,9 +159,21 @@ export const TransactionHistory: React.FC = () => {
                       {formatDateTime(bill.settledAt || bill.createdAt)}
                     </td>
                     <td className="p-4">
-                      <div className="font-semibold text-[#15191E]">{bill.customerName}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-[#15191E]">{bill.customerName}</span>
+                        {bill.isManualEntry && (
+                          <span className="text-[9px] bg-[#FFF0E6] text-[#FF5900] border border-[#FF5900]/30 px-1.5 py-0.2 rounded font-mono font-semibold">
+                            Notebook
+                          </span>
+                        )}
+                      </div>
                       {bill.tableName && (
                         <div className="text-[11px] text-[#006EF5] font-medium">{bill.tableName}</div>
+                      )}
+                      {bill.notes && (
+                        <div className="text-[10px] text-[#8B8D98] truncate max-w-[200px]" title={bill.notes}>
+                          {bill.notes}
+                        </div>
                       )}
                     </td>
                     <td className="p-4">
@@ -208,6 +232,18 @@ export const TransactionHistory: React.FC = () => {
         bill={previewBill}
         isOpen={!!previewBill}
         onClose={() => setPreviewBill(null)}
+      />
+
+      {/* Manual / Notebook Entry Modal */}
+      <ManualNotebookEntryModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+        onSuccess={(billId) => {
+          const created = bills.find((b) => b.id === billId);
+          if (created) {
+            setPreviewBill(created);
+          }
+        }}
       />
     </div>
   );

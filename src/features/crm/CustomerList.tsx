@@ -9,7 +9,8 @@ import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { formatINR } from '../../utils/formatters';
 import { CustomerDetailModal } from './CustomerDetailModal';
-import { Users, UserPlus, Wallet, Phone, Trash2 } from 'lucide-react';
+import { ManualNotebookEntryModal } from '../billing/ManualNotebookEntryModal';
+import { Users, UserPlus, Wallet, Phone, Trash2, BookOpen } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { CustomerListSkeleton } from '../../components/ui/Skeleton';
 
@@ -29,6 +30,7 @@ export const CustomerList: React.FC = () => {
 
   const [activeDetailCustomer, setActiveDetailCustomer] = useState<Customer | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [walletModalCustomer, setWalletModalCustomer] = useState<Customer | null>(null);
   const [rechargeAmount, setRechargeAmount] = useState<number | ''>('');
 
@@ -120,6 +122,15 @@ export const CustomerList: React.FC = () => {
               Clear All Customers
             </Button>
           )}
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setIsManualModalOpen(true)}
+            icon={<BookOpen className="w-4 h-4 text-[#FF5900]" />}
+            className="w-full sm:w-auto h-[44px] sm:h-auto"
+          >
+            Log Past Visit (Notebook)
+          </Button>
           <Button
             variant="primary"
             size="md"
@@ -401,6 +412,12 @@ export const CustomerList: React.FC = () => {
         customer={activeDetailCustomer}
         isOpen={!!activeDetailCustomer}
         onClose={() => setActiveDetailCustomer(null)}
+      />
+
+      {/* Manual / Notebook Entry Modal */}
+      <ManualNotebookEntryModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
       />
     </div>
   );

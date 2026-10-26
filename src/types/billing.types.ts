@@ -56,4 +56,9 @@ export interface Bill {
   createdAt: string;
   settledAt?: string;
   settledByStaff: string;
+
+  // Manual / Notebook backdated entry
+  isManualEntry?: boolean;
+  notes?: string;
 }
+

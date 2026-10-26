@@ -214,6 +214,8 @@ function mapRowToBill(row: Record<string, any>): Bill {
   let splitDetails: any = undefined;
   let sessionStartTime = String(row.created_at || new Date().toISOString());
   let sessionEndTime = row.settled_at ? String(row.settled_at) : undefined;
+  let isManualEntry = false;
+  let notes: string | undefined = undefined;
 
   if (row.discount_reason && typeof row.discount_reason === 'string' && row.discount_reason.trim().startsWith('{')) {
     try {
@@ -223,6 +225,8 @@ function mapRowToBill(row: Record<string, any>): Bill {
         if (parsed.splitDetails) splitDetails = parsed.splitDetails;
         if (parsed.sessionStartTime) sessionStartTime = parsed.sessionStartTime;
         if (parsed.sessionEndTime) sessionEndTime = parsed.sessionEndTime;
+        if (parsed.isManualEntry) isManualEntry = true;
+        if (parsed.notes) notes = parsed.notes;
         discountReason = parsed.reason || undefined;
       }
     } catch {
@@ -288,6 +292,8 @@ function mapRowToBill(row: Record<string, any>): Bill {
     createdAt: String(row.created_at || new Date().toISOString()),
     settledAt: row.settled_at ? String(row.settled_at) : new Date().toISOString(),
     settledByStaff: String(row.settled_by || 'Floor Manager'),
+    isManualEntry: isManualEntry || undefined,
+    notes: notes || undefined,
   };
 }
 
@@ -698,6 +704,8 @@ export const dbService = {
         splitDetails: bill.splitDetails || null,
         sessionStartTime: bill.sessionStartTime,
         sessionEndTime: bill.sessionEndTime,
+        isManualEntry: bill.isManualEntry || false,
+        notes: bill.notes || null,
       };
 
       const { error } = await supabase.from('bills').upsert({

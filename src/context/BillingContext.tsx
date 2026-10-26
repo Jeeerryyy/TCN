@@ -19,10 +19,34 @@ interface SettleSessionOptions {
   cashierName?: string;
 }
 
+export interface ManualBillInput {
+  date: string; // YYYY-MM-DD
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
+  durationMinutes?: number;
+  entryType: 'table' | 'cafe' | 'both';
+  tableId?: string;
+  tableName?: string;
+  ratePerHour?: number;
+  tableCharge: number;
+  cafeCharge: number;
+  discountAmount?: number;
+  discountReason?: string;
+  finalTotal: number;
+  paymentMethod: PaymentMethod;
+  customerId?: string;
+  customerName: string;
+  customerPhone?: string;
+  shouldCreateOrUpdateCustomer?: boolean;
+  notes?: string;
+  cashierName?: string;
+}
+
 interface BillingContextType {
   bills: Bill[];
   settleTableBill: (options: SettleSessionOptions) => Bill | null;
   settleQuickCafeBill: (orderId: string, paymentMethod: PaymentMethod) => Bill | null;
+  addManualBill: (input: ManualBillInput) => Bill;
   deleteBill: (billId: string) => Promise<void>;
   clearAllBills: () => Promise<void>;
   refreshBills: () => Promise<void>;
@@ -49,7 +73,7 @@ const BillingContext = createContext<BillingContextType | undefined>(undefined);
 export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { tables, activeSessionsMap, endSession } = useTables();
   const { orders, updateOrderStatus } = useCafe();
-  const { customers, deductWallet, updateCustomer } = useCustomers();
+  const { customers, deductWallet, updateCustomer, addCustomer } = useCustomers();
 
   const [bills, setBills] = useState<Bill[]>(() =>
     loadFromStorage('bills', INITIAL_BILLS)
@@ -351,6 +375,142 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return bill;
   };
 
+  /**
+   * Records a manual / notebook backdated customer entry into the database & CRM
+   */
+  const addManualBill = (input: ManualBillInput): Bill => {
+    const rawDate = input.date || new Date().toISOString().split('T')[0];
+    const startTimeStr = input.startTime || '12:00';
+    const endTimeStr = input.endTime || '13:00';
+
+    let sessionStartTime: string;
+    let sessionEndTime: string;
+    try {
+      sessionStartTime = new Date(`${rawDate}T${startTimeStr}:00`).toISOString();
+    } catch {
+      sessionStartTime = new Date().toISOString();
+    }
+
+    try {
+      sessionEndTime = new Date(`${rawDate}T${endTimeStr}:00`).toISOString();
+    } catch {
+      sessionEndTime = sessionStartTime;
+    }
+
+    const year = new Date(rawDate).getFullYear() || new Date().getFullYear();
+    const invoiceNumber = `TCN-${year}-MAN-${(bills.length + 1045).toString()}`;
+    const newBillId = `bill_man_${Date.now()}`;
+
+    // Line items
+    const lineItems: BillLineItem[] = [];
+
+    if (input.tableCharge > 0 || input.entryType === 'table' || input.entryType === 'both') {
+      const durationMins = input.durationMinutes || 60;
+      const hrs = Number((durationMins / 60).toFixed(1));
+      lineItems.push({
+        id: `li_${Date.now()}_table`,
+        type: 'table_time',
+        title: `${input.tableName || 'Game Table'} (${hrs} hr${hrs > 1 ? 's' : ''})`,
+        subtitle: `Notebook Record: ${startTimeStr} – ${endTimeStr} (${durationMins}m @ ₹${input.ratePerHour || 0}/hr)`,
+        quantity: 1,
+        unitPrice: input.tableCharge,
+        totalPrice: input.tableCharge,
+      });
+    }
+
+    if (input.cafeCharge > 0 || input.entryType === 'cafe' || input.entryType === 'both') {
+      lineItems.push({
+        id: `li_${Date.now()}_cafe`,
+        type: 'cafe_item',
+        title: 'Café & Snack Tab',
+        subtitle: input.notes ? `Notebook Record: ${input.notes}` : 'Logged from paper notebook register',
+        quantity: 1,
+        unitPrice: input.cafeCharge,
+        totalPrice: input.cafeCharge,
+      });
+    }
+
+    if (lineItems.length === 0) {
+      lineItems.push({
+        id: `li_${Date.now()}_gen`,
+        type: 'surcharge',
+        title: 'Notebook Settlement Charge',
+        subtitle: input.notes || 'Manual register backdated entry',
+        quantity: 1,
+        unitPrice: input.finalTotal,
+        totalPrice: input.finalTotal,
+      });
+    }
+
+    // Customer CRM management
+    let customerId = input.customerId;
+    if (input.shouldCreateOrUpdateCustomer !== false && input.customerName.trim()) {
+      const cleanPhone = (input.customerPhone || '').trim();
+      let matchedCust = customerId ? customers.find((c) => c.id === customerId) : undefined;
+      if (!matchedCust && cleanPhone) {
+        matchedCust = customers.find(
+          (c) => c.phone.replace(/[\s-]/g, '') === cleanPhone.replace(/[\s-]/g, '')
+        );
+      }
+
+      if (matchedCust) {
+        customerId = matchedCust.id;
+        updateCustomer(matchedCust.id, {
+          totalVisits: (matchedCust.totalVisits || 1) + 1,
+          totalSpent: (matchedCust.totalSpent || 0) + input.finalTotal,
+          lastVisit: rawDate,
+        });
+      } else if (cleanPhone) {
+        const newCust = addCustomer({
+          name: input.customerName.trim(),
+          phone: cleanPhone,
+          notes: `Added from manual notebook backdated entry (${rawDate})`,
+        });
+        customerId = newCust.id;
+        updateCustomer(newCust.id, {
+          totalSpent: input.finalTotal,
+          lastVisit: rawDate,
+        });
+      }
+    }
+
+    const manualBill: Bill = {
+      id: newBillId,
+      invoiceNumber,
+      tableId: input.tableId,
+      tableName: input.tableName || (input.entryType === 'cafe' ? 'Counter POS' : 'Table Session'),
+      sessionStartTime,
+      sessionEndTime,
+      customerId,
+      customerName: input.customerName.trim() || 'Walk-in Guest',
+      customerPhone: input.customerPhone?.trim(),
+      items: lineItems,
+      tableCharge: input.tableCharge,
+      cafeCharge: input.cafeCharge,
+      subtotal: input.tableCharge + input.cafeCharge,
+      discountAmount: input.discountAmount || 0,
+      discountReason: input.discountReason || (input.notes ? `Notebook: ${input.notes}` : 'Manual Paper Register Entry'),
+      taxGstAmount: 0,
+      finalTotal: input.finalTotal,
+      status: 'settled',
+      paymentMethod: input.paymentMethod || 'cash',
+      createdAt: sessionStartTime,
+      settledAt: sessionEndTime,
+      settledByStaff: input.cashierName || 'Staff Reconcile',
+      isManualEntry: true,
+      notes: input.notes,
+    };
+
+    setBills((prev) => {
+      const next = [manualBill, ...prev];
+      saveToStorage('bills', next);
+      return next;
+    });
+    dbService.syncBill(manualBill);
+
+    return manualBill;
+  };
+
   const refreshBills = async () => {
     const remote = await dbService.fetchBills();
     if (remote !== null) {
@@ -381,6 +541,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         bills,
         settleTableBill,
         settleQuickCafeBill,
+        addManualBill,
         deleteBill,
         clearAllBills,
         refreshBills,

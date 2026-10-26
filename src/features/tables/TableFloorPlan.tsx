@@ -10,7 +10,8 @@ import { useCafe } from '../../context/CafeContext';
 import { useBilling } from '../../context/BillingContext';
 import { SettleBillModal } from '../billing/SettleBillModal';
 import { InvoiceReceipt } from '../billing/InvoiceReceipt';
-import { CheckCircle2, Clock, Wrench } from 'lucide-react';
+import { ManualNotebookEntryModal } from '../billing/ManualNotebookEntryModal';
+import { CheckCircle2, Clock, Wrench, BookOpen } from 'lucide-react';
 import { FloorPlanSkeleton } from '../../components/ui/Skeleton';
 
 interface TableFloorPlanProps {
@@ -30,6 +31,7 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
   const [sessionModalTable, setSessionModalTable] = useState<Table | null>(null);
   const [transferModalTable, setTransferModalTable] = useState<Table | null>(null);
   const [settleModalTable, setSettleModalTable] = useState<Table | null>(null);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   // Filtered list
   const filteredTables = tables.filter((t) => {
@@ -71,6 +73,15 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
               <Wrench className="w-3.5 h-3.5 text-[#60646C]" /> {maintenanceCount} Maintenance
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => setIsManualModalOpen(true)}
+            className="flex items-center gap-1.5 bg-[#FFFFFF] border border-[#B9BBC6] hover:bg-[#F3F3F7] px-2.5 sm:px-3 py-1.5 rounded-[6px] text-xs font-semibold text-[#15191E] transition-colors shadow-sm ml-auto"
+            title="Log missed or handwritten session from notebook"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-[#FF5900]" />
+            <span>+ Notebook Entry</span>
+          </button>
         </div>
       </div>
 
@@ -137,6 +148,12 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
         bill={activeBillModal}
         isOpen={!!activeBillModal}
         onClose={() => setActiveBillModal(null)}
+      />
+
+      {/* Manual / Notebook Entry Modal */}
+      <ManualNotebookEntryModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
       />
     </div>
   );
