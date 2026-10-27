@@ -200,6 +200,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             tableName: table.name,
             tableType: table.type,
             ratePerHour: table.ratePerHour,
+            ratePerMinute: table.ratePerMinute ?? Number((table.ratePerHour / 60).toFixed(2)),
             startTime: new Date().toISOString(),
             totalPausedDurationMs: 0,
             primaryCustomerName: 'Live Game (Staff In-Progress)',
@@ -225,6 +226,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       tableName: targetTable.name,
       tableType: targetTable.type,
       ratePerHour: targetTable.ratePerHour,
+      ratePerMinute: targetTable.ratePerMinute ?? Number((targetTable.ratePerHour / 60).toFixed(2)),
       startTime: new Date().toISOString(),
       totalPausedDurationMs: 0,
       primaryCustomerName: params.primaryCustomerName || 'Walk-in Guest',
@@ -305,6 +307,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       tableName: destTable.name,
       tableType: destTable.type,
       ratePerHour: destTable.ratePerHour,
+      ratePerMinute: destTable.ratePerMinute ?? Number((destTable.ratePerHour / 60).toFixed(2)),
       notes: active.notes
         ? `${active.notes} | Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`
         : `Transferred from ${sourceTable.name}: ${reason || 'Customer request'}`,

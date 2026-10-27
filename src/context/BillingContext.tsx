@@ -62,6 +62,7 @@ interface BillingContextType {
     tableCharge: number;
     billedMinutes: number;
     billedHours: number;
+    ratePerMinute: number;
     elapsedSeconds: number;
     cafeCharge: number;
     cafeItems: { name: string; quantity: number; price: number }[];
@@ -191,10 +192,11 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!table || !session) return null;
 
     const elapsedSeconds = calculateElapsedSeconds(session);
-    const { billedMinutes, billedHours, amount: tableCharge } = calculateSessionCharge(
+    const { billedMinutes, billedHours, ratePerMinute, amount: tableCharge } = calculateSessionCharge(
       elapsedSeconds,
       session.ratePerHour,
-      table.minMinutes
+      table.minMinutes,
+      session.ratePerMinute
     );
 
     // Collect all active cafe orders linked to this session
@@ -239,6 +241,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       tableCharge,
       billedMinutes,
       billedHours,
+      ratePerMinute,
       elapsedSeconds,
       cafeCharge,
       cafeItems,
@@ -278,13 +281,16 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const invoiceNumber = `TCN-${new Date().getFullYear()}-${(bills.length + 1045).toString()}`;
     const newBillId = `bill_${Date.now()}`;
 
+    const effectiveRatePerMinute =
+      session.ratePerMinute ?? folio.ratePerMinute ?? Number((session.ratePerHour / 60).toFixed(2));
+
     // Line items
     const lineItems: BillLineItem[] = [
       {
         id: `li_${Date.now()}_table`,
         type: 'table_time',
-        title: `${table.name} (${folio.billedHours} hr${folio.billedHours > 1 ? 's' : ''})`,
-        subtitle: `Time: ${formatTimeOnly(session.startTime)} – ${formatTimeOnly(sessionEndTime)} (${folio.billedMinutes}m billed @ ₹${session.ratePerHour}/hr)`,
+        title: `${table.name} (${folio.billedMinutes} mins)`,
+        subtitle: `Time: ${formatTimeOnly(session.startTime)} – ${formatTimeOnly(sessionEndTime)} (${folio.billedMinutes}m @ ₹${effectiveRatePerMinute.toFixed(2)}/min · ₹${session.ratePerHour}/hr)`,
         quantity: 1,
         unitPrice: effectiveTableCharge,
         totalPrice: effectiveTableCharge,

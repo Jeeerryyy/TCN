@@ -14,8 +14,9 @@ export interface Table {
   type: TableType;
   size: string;             // e.g., '7 ft Standard', '8 ft English', '12 ft Tournament'
   clothColor: string;       // e.g., 'Tournament Green', 'Electric Blue', 'Burgundy'
-  ratePerHour: number;      // Standard hourly fee in INR (e.g., 200, 350)
-  minMinutes: number;       // Minimum billing threshold (e.g., 30 mins)
+  ratePerHour: number;      // Standard hourly fee in INR (e.g., 150, 180, 300)
+  ratePerMinute?: number;   // Price per minute in INR (e.g., 2.50, 3.00, 5.00)
+  minMinutes: number;       // Minimum billing threshold (e.g., 0 or 15 mins)
   status: TableStatus;
   currentSessionId?: string;
   locationZone?: string;    // e.g., 'Main Floor', 'VIP Lounge', 'Smoking Zone'
@@ -33,6 +34,7 @@ export interface TableSession {
   tableName: string;
   tableType: TableType;
   ratePerHour: number;
+  ratePerMinute?: number;
   
   // Timing metrics
   startTime: string;        // ISO timestamp

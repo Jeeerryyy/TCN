@@ -82,7 +82,7 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={`Start Session - ${table.name}`}
-      subtitle={`${table.size} · Rate: ${formatINR(table.ratePerHour)}/hr (Hourly billing)`}
+      subtitle={`${table.size} · Rate: ${formatINR(table.ratePerHour)}/hr (₹${(table.ratePerMinute ?? (table.ratePerHour / 60)).toFixed(2)}/min)`}
       maxWidth="md"
     >
       <form onSubmit={handleStart} className="space-y-4">

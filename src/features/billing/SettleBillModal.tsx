@@ -325,10 +325,10 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
           <div className="flex justify-between items-center text-xs">
             <div>
               <div className="font-medium text-[#000000]">
-                {table.name} ({folio.billedHours} hr${folio.billedHours > 1 ? 's' : ''} billed)
+                {table.name} ({folio.billedMinutes} mins @ ₹{(session.ratePerMinute ?? folio.ratePerMinute ?? (session.ratePerHour / 60)).toFixed(2)}/min)
               </div>
               <div className="text-[11px] text-[#60646C] font-mono">
-                Rate: {formatINR(session.ratePerHour)}/hr · Total Minutes: {folio.billedMinutes}m
+                Rate: ₹{(session.ratePerMinute ?? folio.ratePerMinute ?? (session.ratePerHour / 60)).toFixed(2)}/min ({formatINR(session.ratePerHour)}/hr) · Total Duration: {folio.billedMinutes} mins
               </div>
             </div>
             <span className="font-mono font-bold text-[#15191E] text-sm">

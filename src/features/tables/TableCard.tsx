@@ -44,6 +44,7 @@ export const TableCard: React.FC<TableCardProps> = ({
         tableName: table.name,
         tableType: table.type,
         ratePerHour: table.ratePerHour,
+        ratePerMinute: table.ratePerMinute ?? Number((table.ratePerHour / 60).toFixed(2)),
         startTime: new Date().toISOString(),
         totalPausedDurationMs: 0,
         primaryCustomerName: 'Live Game (Staff In-Progress)',
@@ -68,13 +69,19 @@ export const TableCard: React.FC<TableCardProps> = ({
   }, [session, sessions, table.id]);
 
   // Dynamic recalculation triggered by tickCounter
-  const { elapsedSeconds, liveCharge, billedHours } = useMemo(() => {
-    if (!session) return { elapsedSeconds: 0, liveCharge: 0, billedHours: 0 };
+  const { elapsedSeconds, liveCharge, billedMinutes, ratePerMinute } = useMemo(() => {
+    const tableRatePerMinute = table.ratePerMinute ?? Number((table.ratePerHour / 60).toFixed(2));
+    if (!session) return { elapsedSeconds: 0, liveCharge: 0, billedMinutes: 0, ratePerMinute: tableRatePerMinute };
     const secs = calculateElapsedSeconds(session);
-    const { billedHours, amount } = calculateSessionCharge(secs, session.ratePerHour, table.minMinutes);
-    return { elapsedSeconds: secs, liveCharge: amount, billedHours };
+    const { billedMinutes, amount, ratePerMinute } = calculateSessionCharge(
+      secs,
+      session.ratePerHour,
+      table.minMinutes,
+      session.ratePerMinute
+    );
+    return { elapsedSeconds: secs, liveCharge: amount, billedMinutes, ratePerMinute };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, tickCounter, table.minMinutes]);
+  }, [session, tickCounter, table.minMinutes, table.ratePerHour, session?.ratePerMinute]);
 
   // Total linked cafe items for this table
   const linkedCafeOrders = orders.filter((o) => session?.linkedCafeOrderIds?.includes(o.id));
@@ -111,7 +118,7 @@ export const TableCard: React.FC<TableCardProps> = ({
               {table.name}
             </h4>
             <span className="text-[11px] text-[#60646C] font-mono">
-              {table.size} · {formatINR(table.ratePerHour)}/hr
+              {table.size} · {formatINR(table.ratePerHour)}/hr (₹{ratePerMinute.toFixed(2)}/min)
             </span>
           </div>
         </div>
@@ -179,7 +186,7 @@ export const TableCard: React.FC<TableCardProps> = ({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[10px] uppercase font-semibold text-[#60646C] tracking-wider">
-                      Duration ({billedHours}h billed)
+                      Duration ({billedMinutes}m @ ₹{ratePerMinute.toFixed(2)}/min)
                     </div>
                     <div className="text-xl font-mono font-medium text-[#000000] mt-0.5">
                       {formatDurationHMS(elapsedSeconds)}

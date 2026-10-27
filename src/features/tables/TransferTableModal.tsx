@@ -82,7 +82,7 @@ export const TransferTableModal: React.FC<TransferTableModalProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm text-[#000000]">{t.name}</span>
-                    <span className="text-xs font-mono font-semibold text-[#FF5900]">{formatINR(t.ratePerHour)}/hr</span>
+                    <span className="text-xs font-mono font-semibold text-[#FF5900]">{formatINR(t.ratePerHour)}/hr (₹{(t.ratePerMinute ?? (t.ratePerHour / 60)).toFixed(2)}/m)</span>
                   </div>
                   <div className="text-[11px] text-[#60646C] mt-1 font-mono">
                     {t.size} · {t.clothColor}

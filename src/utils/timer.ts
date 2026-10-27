@@ -29,52 +29,51 @@ export function calculateElapsedSeconds(session: TableSession): number {
 }
 
 /**
- * Calculates game charges on an hourly basis:
- * - Rates are strictly hourly. Even if a player plays 40 minutes (or any duration <= 60 mins),
- *   they are charged 1 full hourly rate.
- * - If the elapsed time exceeds the completed hour(s) by MORE THAN 20 minutes (> 20 mins grace),
- *   a new full hour's rate is added to the bill.
- * - If the excess time is 20 minutes or less (<= 20 mins), only the completed hour(s) are charged.
+ * Calculates game charges on an exact per-minute basis:
+ * - Table charge = total active minutes * price per minute.
+ * - Price per minute is either customRatePerMinute or derived from ratePerHour / 60
+ *   (e.g., ₹150/hr = ₹2.50/min, ₹180/hr = ₹3.00/min, ₹300/hr = ₹5.00/min).
+ * - Minimum duration threshold (minMinutes) is applied if configured (default 0).
+ * - Total bill is rounded to the nearest integer rupee using Math.round.
  *
  * Examples:
- *   10 mins  -> 1 hour
- *   40 mins  -> 1 hour
- *   60 mins  -> 1 hour
- *   75 mins (1h 15m) -> 1 hour (excess 15m <= 20m)
- *   80 mins (1h 20m) -> 1 hour (excess 20m <= 20m)
- *   81 mins (1h 21m) -> 2 hours (excess 21m > 20m, new hour rate added)
- *   120 mins (2h 00m) -> 2 hours
- *   140 mins (2h 20m) -> 2 hours (excess 20m <= 20m)
- *   141 mins (2h 21m) -> 3 hours (excess 21m > 20m, new hour rate added)
+ *   Rate ₹150/hr (₹2.50/min):
+ *     10 mins -> 10 * 2.50 = ₹25
+ *     24 mins -> 24 * 2.50 = ₹60
+ *     45 mins -> 45 * 2.50 = ₹112.50 -> ₹113
+ *     60 mins -> 60 * 2.50 = ₹150
+ *     75 mins -> 75 * 2.50 = ₹187.50 -> ₹188
+ *
+ *   Rate ₹300/hr (₹5.00/min):
+ *     30 mins -> 30 * 5.00 = ₹150
+ *     75 mins -> 75 * 5.00 = ₹375
  */
 export function calculateSessionCharge(
   elapsedSeconds: number,
   ratePerHour: number,
-  _minMinutes: number = 60
-): { billedMinutes: number; billedHours: number; amount: number } {
+  minMinutes: number = 0,
+  customRatePerMinute?: number
+): {
+  billedMinutes: number;
+  billedHours: number;
+  ratePerMinute: number;
+  amount: number;
+} {
   const safeSeconds = Math.max(0, elapsedSeconds);
   const elapsedMinutes = Math.floor(safeSeconds / 60);
 
-  let billedHours = 1;
+  const effectiveMinMinutes = minMinutes > 0 ? minMinutes : 0;
+  const billedMinutes = Math.max(effectiveMinMinutes, elapsedMinutes);
 
-  if (elapsedMinutes <= 60) {
-    // 0 to 60 minutes: minimum charge is 1 full hour
-    billedHours = 1;
-  } else {
-    // Over 60 minutes: calculate completed hours and extra minutes into the next hour
-    const completedHours = Math.floor(elapsedMinutes / 60);
-    const excessMinutes = elapsedMinutes % 60;
+  // Derive per-minute rate (e.g., 150 / 60 = 2.50)
+  const ratePerMinute =
+    typeof customRatePerMinute === 'number' && customRatePerMinute > 0
+      ? customRatePerMinute
+      : Number((ratePerHour / 60).toFixed(2));
 
-    // If time exceeds completed hour(s) by more than 20 minutes, add the new hour's rate
-    if (excessMinutes > 20) {
-      billedHours = completedHours + 1;
-    } else {
-      billedHours = completedHours;
-    }
-  }
+  // Total bill = total time in minutes multiplied by price per minute
+  const amount = Math.round(billedMinutes * ratePerMinute);
+  const billedHours = Number((billedMinutes / 60).toFixed(1));
 
-  const billedMinutes = billedHours * 60;
-  const amount = billedHours * ratePerHour;
-
-  return { billedMinutes, billedHours, amount };
+  return { billedMinutes, billedHours, ratePerMinute, amount };
 }

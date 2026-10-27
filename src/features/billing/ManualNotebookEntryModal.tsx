@@ -121,10 +121,11 @@ export const ManualNotebookEntryModal: React.FC<ManualNotebookEntryModalProps> =
   // Selected table helper
   const currentTable = tables.find((t) => t.id === selectedTableId) || tables[0];
   const ratePerHour = currentTable ? currentTable.ratePerHour : 240;
+  const ratePerMinute = currentTable?.ratePerMinute ?? Number((ratePerHour / 60).toFixed(2));
 
-  // Calculate table charge
+  // Calculate table charge based on total time multiplied by price per minute
   const calculatedTableCharge = currentTable
-    ? Math.round((durationMinutes / 60) * ratePerHour)
+    ? Math.round(durationMinutes * ratePerMinute)
     : 0;
 
   const effectiveTableCharge =
@@ -475,7 +476,7 @@ export const ManualNotebookEntryModal: React.FC<ManualNotebookEntryModalProps> =
                 >
                   {tables.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} ({t.type === 'pool' ? 'Pool' : 'Snooker'} @ ₹{t.ratePerHour}/hr)
+                      {t.name} ({t.type === 'pool' ? 'Pool' : 'Snooker'} @ ₹{t.ratePerHour}/hr · ₹{(t.ratePerMinute ?? t.ratePerHour / 60).toFixed(2)}/min)
                     </option>
                   ))}
                 </select>
@@ -498,7 +499,7 @@ export const ManualNotebookEntryModal: React.FC<ManualNotebookEntryModalProps> =
                   <div className="w-full bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] px-3 py-2 text-xs font-mono font-bold text-[#15191E] flex items-center justify-between">
                     <span>{formatINR(calculatedTableCharge)}</span>
                     <span className="text-[10px] text-[#60646C] font-normal">
-                      ({durationMinutes}m @ ₹{ratePerHour}/hr)
+                      ({durationMinutes}m @ ₹{ratePerMinute.toFixed(2)}/min)
                     </span>
                   </div>
                 )}

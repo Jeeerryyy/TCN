@@ -31,6 +31,7 @@ export const TableStudio: React.FC = () => {
   const [tableSize, setTableSize] = useState('');
   const [clothColor, setClothColor] = useState('');
   const [ratePerHour, setRatePerHour] = useState('');
+  const [ratePerMinute, setRatePerMinute] = useState('');
   const [minMinutes, setMinMinutes] = useState('');
   const [locationZone, setLocationZone] = useState('');
 
@@ -47,6 +48,7 @@ export const TableStudio: React.FC = () => {
     setTableSize('');
     setClothColor('');
     setRatePerHour('');
+    setRatePerMinute('');
     setMinMinutes('');
     setLocationZone('');
     setErrorMessage(null);
@@ -65,6 +67,11 @@ export const TableStudio: React.FC = () => {
     setTableSize(table.size);
     setClothColor(table.clothColor);
     setRatePerHour(table.ratePerHour.toString());
+    setRatePerMinute(
+      table.ratePerMinute !== undefined
+        ? table.ratePerMinute.toString()
+        : (table.ratePerHour / 60).toFixed(2)
+    );
     setMinMinutes(table.minMinutes.toString());
     setLocationZone(table.locationZone || '');
     setErrorMessage(null);
@@ -84,11 +91,17 @@ export const TableStudio: React.FC = () => {
 
     const rate = parseInt(ratePerHour, 10);
     const minMins = parseInt(minMinutes, 10);
+    const customPerMin = parseFloat(ratePerMinute);
 
     if (isNaN(rate) || rate <= 0) {
       setErrorMessage('Hourly rate must be a valid positive number.');
       return;
     }
+
+    const calculatedPerMin =
+      !isNaN(customPerMin) && customPerMin > 0
+        ? customPerMin
+        : Number((rate / 60).toFixed(2));
 
     addTable({
       name: tableName.trim(),
@@ -97,7 +110,8 @@ export const TableStudio: React.FC = () => {
       size: tableSize,
       clothColor,
       ratePerHour: rate,
-      minMinutes: isNaN(minMins) ? 60 : minMins,
+      ratePerMinute: calculatedPerMin,
+      minMinutes: isNaN(minMins) ? 0 : minMins,
       locationZone,
     });
 
@@ -118,11 +132,17 @@ export const TableStudio: React.FC = () => {
 
     const rate = parseInt(ratePerHour, 10);
     const minMins = parseInt(minMinutes, 10);
+    const customPerMin = parseFloat(ratePerMinute);
 
     if (isNaN(rate) || rate <= 0) {
       setErrorMessage('Hourly rate must be a valid positive number.');
       return;
     }
+
+    const calculatedPerMin =
+      !isNaN(customPerMin) && customPerMin > 0
+        ? customPerMin
+        : Number((rate / 60).toFixed(2));
 
     updateTable(editingTable.id, {
       name: tableName.trim(),
@@ -131,7 +151,8 @@ export const TableStudio: React.FC = () => {
       size: tableSize,
       clothColor,
       ratePerHour: rate,
-      minMinutes: isNaN(minMins) ? 60 : minMins,
+      ratePerMinute: calculatedPerMin,
+      minMinutes: isNaN(minMins) ? 0 : minMins,
       locationZone,
     });
 
@@ -284,7 +305,10 @@ export const TableStudio: React.FC = () => {
                       {table.clothColor}
                     </td>
                     <td className="px-6 py-4 font-mono font-semibold text-[#15191E]">
-                      {formatINR(table.ratePerHour)}/hr
+                      <div>{formatINR(table.ratePerHour)}/hr</div>
+                      <div className="text-[11px] text-[#FF5900] font-normal">
+                        ₹{(table.ratePerMinute ?? (table.ratePerHour / 60)).toFixed(2)}/min
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-[#60646C]">
                       {table.minMinutes} mins
@@ -433,20 +457,46 @@ export const TableStudio: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-medium text-xs text-[#15191E] mb-1">
-                    Hourly Rate (₹ INR)
+                    Hourly Rate (₹)
                   </label>
                   <input
                     type="number"
                     required
-                    min={50}
+                    min={30}
                     step={10}
                     value={ratePerHour}
-                    onChange={(e) => setRatePerHour(e.target.value)}
-                    placeholder="Enter hourly rate"
+                    onChange={(e) => {
+                      setRatePerHour(e.target.value);
+                      const num = Number(e.target.value);
+                      if (!isNaN(num) && num > 0) {
+                        setRatePerMinute((num / 60).toFixed(2));
+                      }
+                    }}
+                    placeholder="e.g. 150"
                     className="w-full h-[40px] px-3 rounded-[6px] bg-[#FFFFFF] border border-[#B9BBC6] text-sm text-[#15191E] font-mono font-semibold placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-xs text-[#15191E] mb-1">
+                    Rate / Minute (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0.1"
+                    value={ratePerMinute}
+                    onChange={(e) => {
+                      setRatePerMinute(e.target.value);
+                      const num = Number(e.target.value);
+                      if (!isNaN(num) && num > 0) {
+                        setRatePerHour(Math.round(num * 60).toString());
+                      }
+                    }}
+                    placeholder="e.g. 2.50"
+                    className="w-full h-[40px] px-3 rounded-[6px] bg-[#FFFFFF] border border-[#B9BBC6] text-sm text-[#FF5900] font-mono font-bold placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
                   />
                 </div>
                 <div>
@@ -455,11 +505,11 @@ export const TableStudio: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    min={15}
-                    step={15}
+                    min={0}
+                    step={5}
                     value={minMinutes}
                     onChange={(e) => setMinMinutes(e.target.value)}
-                    placeholder="Enter minimum duration"
+                    placeholder="0 = Exact Time"
                     className="w-full h-[40px] px-3 rounded-[6px] bg-[#FFFFFF] border border-[#B9BBC6] text-sm text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
                   />
                 </div>
