@@ -1,17 +1,20 @@
-/* Brex Design System – Verified: High-contrast Fintech, Inter typography, 0px letter spacing, #FF5900 action orange */
-
 import React, { useState } from 'react';
 import { useCafe } from '../../context/CafeContext';
+import { useBilling } from '../../context/BillingContext';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDateTime } from '../../utils/formatters';
-import { ChefHat, CheckCircle2, Clock, Flame, BellRing } from 'lucide-react';
-import { KitchenStatus } from '../../types/cafe.types';
+import { formatDateTime, formatINR } from '../../utils/formatters';
+import { ChefHat, CheckCircle2, Clock, Flame, BellRing, Receipt } from 'lucide-react';
+import { CafeOrder, KitchenStatus } from '../../types/cafe.types';
 import { KitchenOrdersSkeleton } from '../../components/ui/Skeleton';
+import { SettleCafeBillModal } from './SettleCafeBillModal';
+import { InvoiceReceipt } from '../billing/InvoiceReceipt';
 
 export const KitchenOrdersView: React.FC = () => {
   const { orders, updateOrderStatus, isLoading } = useCafe();
+  const { activeBillModal, setActiveBillModal } = useBilling();
   const [mobileStage, setMobileStage] = useState<KitchenStatus | 'all'>('all');
+  const [orderToSettle, setOrderToSettle] = useState<CafeOrder | null>(null);
 
   if (isLoading && orders.length === 0) {
     return <KitchenOrdersSkeleton />;
@@ -167,44 +170,65 @@ export const KitchenOrdersView: React.FC = () => {
                       </div>
 
                       {/* Transition Action Buttons */}
-                      <div className="flex gap-2 pt-1">
-                        {order.status === 'pending' && (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="w-full text-xs font-normal"
-                            onClick={() => updateOrderStatus(order.id, 'cooking')}
-                          >
-                            Start Cooking
-                          </Button>
-                        )}
+                      <div className="space-y-2 pt-1">
+                        <div className="flex gap-2">
+                          {order.status === 'pending' && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="w-full text-xs font-normal"
+                              onClick={() => updateOrderStatus(order.id, 'cooking')}
+                            >
+                              Start Cooking
+                            </Button>
+                          )}
 
-                        {order.status === 'cooking' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className="w-full text-xs font-normal"
-                            onClick={() => updateOrderStatus(order.id, 'ready')}
-                          >
-                            Mark Ready
-                          </Button>
-                        )}
+                          {order.status === 'cooking' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="w-full text-xs font-normal"
+                              onClick={() => updateOrderStatus(order.id, 'ready')}
+                            >
+                              Mark Ready
+                            </Button>
+                          )}
 
-                        {order.status === 'ready' && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className="w-full text-xs font-normal bg-[#0D9926] hover:bg-[#0D9926]/90 border-transparent text-white"
-                            onClick={() => updateOrderStatus(order.id, 'served')}
-                          >
-                            Confirm Served
-                          </Button>
-                        )}
+                          {order.status === 'ready' && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="w-full text-xs font-normal bg-[#0D9926] hover:bg-[#0D9926]/90 border-transparent text-white"
+                              onClick={() => updateOrderStatus(order.id, 'served')}
+                            >
+                              Confirm Served
+                            </Button>
+                          )}
 
-                        {order.status === 'served' && (
-                          <div className="text-[11px] text-[#0D9926] font-semibold flex items-center justify-center w-full py-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-[#0D9926]" /> Served to table
-                          </div>
+                          {order.status === 'served' && (
+                            <div className="text-[11px] text-[#0D9926] font-semibold flex items-center justify-center w-full py-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-[#0D9926]" /> Served
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Separate Snacks & Drinks Customer Bill Generation */}
+                        {(!order.tableName || order.destination === 'counter' || order.destination === 'takeaway') && (
+                          order.isBilled ? (
+                            <div className="text-[10px] font-mono text-[#0D9926] font-semibold text-center bg-[#D1F4D2]/40 border border-[#0D9926]/20 py-0.5 rounded">
+                              ✓ Bill Settled
+                            </div>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="w-full text-xs font-semibold text-[#FF5900] border-[#FF5900]/30 hover:bg-[#FFF4ED]"
+                              onClick={() => setOrderToSettle(order)}
+                              icon={<Receipt className="w-3.5 h-3.5 text-[#FF5900]" />}
+                            >
+                              Generate Bill ({formatINR(order.subtotal)})
+                            </Button>
+                          )
                         )}
                       </div>
                     </div>
@@ -215,6 +239,23 @@ export const KitchenOrdersView: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Standalone Cafe Bill Settlement Modal */}
+      {orderToSettle && (
+        <SettleCafeBillModal
+          isOpen={!!orderToSettle}
+          onClose={() => setOrderToSettle(null)}
+          order={orderToSettle}
+          onSuccess={() => setOrderToSettle(null)}
+        />
+      )}
+
+      {/* Thermal Invoice Receipt */}
+      <InvoiceReceipt
+        bill={activeBillModal}
+        isOpen={!!activeBillModal}
+        onClose={() => setActiveBillModal(null)}
+      />
     </div>
   );
 };

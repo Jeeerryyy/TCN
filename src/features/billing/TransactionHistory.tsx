@@ -2,22 +2,25 @@
 
 import React, { useState } from 'react';
 import { useBilling } from '../../context/BillingContext';
+import { useAuth } from '../../context/AuthContext';
 import { SearchInput } from '../../components/ui/SearchInput';
-import { formatINR, formatDateTime } from '../../utils/formatters';
+import { formatINR, formatDateTime, getBillDateString, getLocalDateString } from '../../utils/formatters';
 import { Bill } from '../../types/billing.types';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { ManualNotebookEntryModal } from './ManualNotebookEntryModal';
-import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen, Phone, Pencil, User, Check } from 'lucide-react';
+import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen, Phone, Pencil, User, Check, Coffee } from 'lucide-react';
 import { TransactionHistorySkeleton } from '../../components/ui/Skeleton';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 
 export const TransactionHistory: React.FC = () => {
   const { bills, deleteBill, clearAllBills, refreshBills, updateBillDetails, isLoading } = useBilling();
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [adminRevenueFilter, setAdminRevenueFilter] = useState<'per_day' | 'overall'>('per_day');
 
   // Edit customer & phone state for any bill
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
@@ -81,7 +84,12 @@ export const TransactionHistory: React.FC = () => {
     }
   };
 
-  const totalSettledRevenue = bills.reduce((sum, b) => sum + b.finalTotal, 0);
+  const todayStr = getLocalDateString();
+  const todayBills = bills.filter((b) => getBillDateString(b) === todayStr && b.status !== 'voided');
+  const todaySettledRevenue = todayBills.reduce((sum, b) => sum + b.finalTotal, 0);
+
+  const overallBills = bills.filter((b) => b.status !== 'voided');
+  const totalSettledRevenue = overallBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
   return (
     <div className="space-y-6">
@@ -97,12 +105,57 @@ export const TransactionHistory: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="bg-[#FFFFFF] border border-[#B9BBC6] px-4 py-2.5 rounded-[8px] flex items-center gap-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
-            <span className="text-xs text-[#60646C] font-medium">Total Registered Revenue:</span>
-            <span className="text-lg font-mono font-bold text-[#FF5900]">
-              {formatINR(totalSettledRevenue)}
-            </span>
-          </div>
+          {/* Revenue Pill: Admin-Only with Live Per-Day vs Overall Switcher (Hidden completely from staff) */}
+          {isAdmin && (
+            <div className="bg-[#FFFFFF] border border-[#B9BBC6] px-3.5 py-2 rounded-[8px] flex items-center gap-3 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-[#60646C] font-semibold uppercase tracking-wider">
+                    {adminRevenueFilter === 'per_day' ? "Today's Live Revenue" : 'Overall Revenue'}
+                  </span>
+                  {adminRevenueFilter === 'per_day' && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider bg-[#D1F4D2] text-[#0D9926] px-1.5 py-0.2 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0D9926] animate-pulse" /> Live
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-base font-mono font-bold text-[#FF5900]">
+                    {formatINR(adminRevenueFilter === 'per_day' ? todaySettledRevenue : totalSettledRevenue)}
+                  </span>
+                  <span className="text-[10px] text-[#8B8D98] font-medium">
+                    ({adminRevenueFilter === 'per_day' ? `${todayBills.length} today` : `${overallBills.length} total`})
+                  </span>
+                </div>
+              </div>
+
+              {/* Segmented Mode Switcher */}
+              <div className="inline-flex p-0.5 bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] text-[10px] font-semibold ml-1">
+                <button
+                  type="button"
+                  onClick={() => setAdminRevenueFilter('per_day')}
+                  className={`px-2 py-1 rounded-[4px] transition-all ${
+                    adminRevenueFilter === 'per_day'
+                      ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
+                      : 'text-[#60646C] hover:text-[#000000]'
+                  }`}
+                >
+                  Per Day (Live)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminRevenueFilter('overall')}
+                  className={`px-2 py-1 rounded-[4px] transition-all ${
+                    adminRevenueFilter === 'overall'
+                      ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
+                      : 'text-[#60646C] hover:text-[#000000]'
+                  }`}
+                >
+                  Overall
+                </button>
+              </div>
+            </div>
+          )}
 
           <Button
             variant="primary"
@@ -186,6 +239,12 @@ export const TransactionHistory: React.FC = () => {
                     <td className="p-4">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-[#15191E]">{bill.customerName}</span>
+                        {bill.tableCharge === 0 && bill.cafeCharge > 0 && (
+                          <span className="text-[9px] bg-[#FFF4ED] text-[#FF5900] border border-[#FF5900]/30 px-1.5 py-0.2 rounded font-mono font-semibold inline-flex items-center gap-1">
+                            <Coffee className="w-2.5 h-2.5 text-[#FF5900]" />
+                            Snacks & Drinks
+                          </span>
+                        )}
                         {bill.isManualEntry && (
                           <span className="text-[9px] bg-[#FFF0E6] text-[#FF5900] border border-[#FF5900]/30 px-1.5 py-0.2 rounded font-mono font-semibold">
                             Notebook

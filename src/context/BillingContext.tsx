@@ -23,6 +23,22 @@ export interface SettleSessionOptions {
   tableChargeOverride?: number;
 }
 
+export interface SettleCafeBillOptions {
+  orderId?: string; // If settling an existing CafeOrder
+  customerName?: string;
+  customerPhone?: string;
+  customerId?: string;
+  items: { name: string; quantity: number; price: number; notes?: string }[];
+  subtotal?: number;
+  discountAmount?: number;
+  discountReason?: string;
+  paymentMethod: PaymentMethod;
+  splitShares?: SplitPaymentShare[];
+  destination?: 'counter' | 'takeaway';
+  cashierName?: string;
+  notes?: string;
+}
+
 export interface ManualBillInput {
   date: string; // YYYY-MM-DD
   startTime?: string; // HH:mm
@@ -50,6 +66,7 @@ interface BillingContextType {
   bills: Bill[];
   settleTableBill: (options: SettleSessionOptions) => Bill | null;
   settleQuickCafeBill: (orderId: string, paymentMethod: PaymentMethod) => Bill | null;
+  settleStandaloneCafeBill: (options: SettleCafeBillOptions) => Bill | null;
   addManualBill: (input: ManualBillInput) => Bill;
   deleteBill: (billId: string) => Promise<void>;
   clearAllBills: () => Promise<void>;
@@ -416,51 +433,141 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   /**
+   * Settles standalone snacks & drinks cafe order for separate customers
+   */
+  const settleStandaloneCafeBill = (options: SettleCafeBillOptions): Bill | null => {
+    if (!options.items || options.items.length === 0) return null;
+
+    const invoiceNumber = `TCN-${new Date().getFullYear()}-${(bills.length + 1045).toString()}`;
+    const newBillId = `bill_cafe_${Date.now()}`;
+    const subtotal =
+      options.subtotal !== undefined
+        ? options.subtotal
+        : options.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discount = options.discountAmount || 0;
+    const finalTotal = Math.max(0, subtotal - discount);
+
+    const lineItems: BillLineItem[] = options.items.map((item, idx) => ({
+      id: `li_${Date.now()}_cafe_${idx}`,
+      type: 'cafe_item' as const,
+      title: item.name,
+      subtitle: item.notes ? `Note: ${item.notes}` : undefined,
+      quantity: item.quantity,
+      unitPrice: item.price,
+      totalPrice: item.price * item.quantity,
+    }));
+
+    const finalCustomerName =
+      (options.customerName && options.customerName.trim()) || 'Walk-in Guest';
+    const finalCustomerPhone = options.customerPhone
+      ? options.customerPhone.trim() || undefined
+      : undefined;
+
+    // Customer CRM management
+    let customerId = options.customerId;
+    if (finalCustomerPhone) {
+      const cleanPhone = finalCustomerPhone.replace(/[\s-]/g, '');
+      let matchedCust = customerId ? customers.find((c) => c.id === customerId) : undefined;
+      if (!matchedCust) {
+        matchedCust = customers.find(
+          (c) => c.phone && c.phone.replace(/[\s-]/g, '') === cleanPhone
+        );
+      }
+      if (matchedCust) {
+        customerId = matchedCust.id;
+        updateCustomer(matchedCust.id, {
+          totalVisits: (matchedCust.totalVisits || 1) + 1,
+          totalSpent: (matchedCust.totalSpent || 0) + finalTotal,
+          lastVisit: new Date().toISOString().split('T')[0],
+        });
+      } else {
+        const newCust = addCustomer({
+          name: finalCustomerName,
+          phone: finalCustomerPhone,
+          notes: 'Customer created from snacks & drinks order',
+        });
+        customerId = newCust.id;
+        updateCustomer(newCust.id, {
+          totalSpent: finalTotal,
+          lastVisit: new Date().toISOString().split('T')[0],
+        });
+      }
+    }
+
+    // Wallet deduction if customer pays with wallet
+    if (options.paymentMethod === 'wallet' && customerId) {
+      const ok = deductWallet(customerId, finalTotal, invoiceNumber);
+      if (!ok) {
+        alert('Insufficient wallet credit. Please select alternate payment method or top up.');
+        return null;
+      }
+    }
+
+    const existingOrder = options.orderId ? orders.find((o) => o.id === options.orderId) : null;
+
+    const settledBill: Bill = {
+      id: newBillId,
+      invoiceNumber,
+      tableName: options.destination === 'takeaway' ? 'Takeaway Counter' : 'Café Lounge / Counter',
+      customerId,
+      customerName: finalCustomerName,
+      customerPhone: finalCustomerPhone,
+      items: lineItems,
+      tableCharge: 0,
+      cafeCharge: subtotal,
+      subtotal,
+      discountAmount: discount,
+      discountReason: options.discountReason || (discount > 0 ? 'Promo Discount' : undefined),
+      taxGstAmount: 0,
+      finalTotal,
+      status: 'settled',
+      paymentMethod: options.paymentMethod,
+      splitDetails: options.splitShares,
+      createdAt: existingOrder ? existingOrder.createdAt : new Date().toISOString(),
+      settledAt: new Date().toISOString(),
+      settledByStaff: options.cashierName || 'Café Cashier',
+      notes: options.notes,
+    };
+
+    // If an existing orderId was passed, mark order as served and billed
+    if (options.orderId) {
+      const orderToUpdate = existingOrder || orders.find((o) => o.id === options.orderId);
+      if (orderToUpdate) {
+        const updatedOrder = {
+          ...orderToUpdate,
+          status: 'served' as const,
+          isBilled: true,
+          billId: settledBill.id,
+          servedAt: new Date().toISOString(),
+        };
+        updateOrderStatus(orderToUpdate.id, 'served');
+        dbService.syncOrder(updatedOrder);
+      }
+    }
+
+    setBills((prev) => [settledBill, ...prev]);
+    setActiveBillModal(settledBill);
+    dbService.syncBill(settledBill);
+
+    return settledBill;
+  };
+
+  /**
    * Settles standalone counter cafe order immediately
    */
   const settleQuickCafeBill = (orderId: string, paymentMethod: PaymentMethod): Bill | null => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return null;
 
-    const invoiceNumber = `TCN-${new Date().getFullYear()}-${(bills.length + 1045).toString()}`;
-    const taxGstAmount = 0; // GST completely removed
-    const finalTotal = order.subtotal;
-
-    const lineItems: BillLineItem[] = order.items.map((i, idx) => ({
-      id: `li_${Date.now()}_${idx}`,
-      type: 'cafe_item',
-      title: i.name,
-      quantity: i.quantity,
-      unitPrice: i.price,
-      totalPrice: i.price * i.quantity,
-    }));
-
-    const bill: Bill = {
-      id: `bill_${Date.now()}`,
-      invoiceNumber,
-      customerName: order.customerName || 'Walk-in Guest',
-      items: lineItems,
-      tableCharge: 0,
-      cafeCharge: order.subtotal,
+    return settleStandaloneCafeBill({
+      orderId,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      items: order.items,
       subtotal: order.subtotal,
-      discountAmount: 0,
-      taxGstAmount,
-      finalTotal,
-      status: 'settled',
       paymentMethod,
-      createdAt: order.createdAt,
-      settledAt: new Date().toISOString(),
-      settledByStaff: 'Cafe Counter POS',
-    };
-
-    updateOrderStatus(orderId, 'served');
-    const updatedOrder = { ...order, status: 'served' as const, isBilled: true, billId: bill.id };
-    dbService.syncOrder(updatedOrder);
-    setBills((prev) => [bill, ...prev]);
-    setActiveBillModal(bill);
-    dbService.syncBill(bill);
-
-    return bill;
+      destination: order.destination === 'takeaway' ? 'takeaway' : 'counter',
+    });
   };
 
   /**
@@ -629,6 +736,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         bills,
         settleTableBill,
         settleQuickCafeBill,
+        settleStandaloneCafeBill,
         addManualBill,
         deleteBill,
         clearAllBills,

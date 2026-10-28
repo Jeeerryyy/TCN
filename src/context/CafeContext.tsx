@@ -16,6 +16,7 @@ interface CafeContextType {
   cartDestination: 'table' | 'counter' | 'takeaway';
   selectedTableId: string;
   cartCustomerName: string;
+  cartCustomerPhone: string;
   
   // Cart Actions
   addToCart: (item: MenuItem, notes?: string) => void;
@@ -25,6 +26,7 @@ interface CafeContextType {
   setCartDestination: (dest: 'table' | 'counter' | 'takeaway') => void;
   setSelectedTableId: (tableId: string) => void;
   setCartCustomerName: (name: string) => void;
+  setCartCustomerPhone: (phone: string) => void;
   submitCartOrder: () => CafeOrder | null;
 
   // Menu Admin Actions
@@ -47,9 +49,17 @@ const CafeContext = createContext<CafeContextType | undefined>(undefined);
 export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { tables, linkCafeOrderToTable } = useTables();
 
-  const [menu, setMenu] = useState<MenuItem[]>(() =>
-    loadFromStorage('menu', INITIAL_MENU_ITEMS)
-  );
+  const [menu, setMenu] = useState<MenuItem[]>(() => {
+    const loaded = loadFromStorage('menu', INITIAL_MENU_ITEMS);
+    const existingIds = new Set(loaded.map((m: MenuItem) => m.id));
+    const missing = INITIAL_MENU_ITEMS.filter((item) => !existingIds.has(item.id));
+    if (missing.length > 0) {
+      const merged = [...loaded, ...missing];
+      saveToStorage('menu', merged);
+      return merged;
+    }
+    return loaded;
+  });
 
   const [orders, setOrders] = useState<CafeOrder[]>(() =>
     loadFromStorage('orders', INITIAL_ORDERS)
@@ -60,9 +70,10 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Active POS cart state
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [cartDestination, setCartDestination] = useState<'table' | 'counter' | 'takeaway'>('table');
+  const [cartDestination, setCartDestination] = useState<'table' | 'counter' | 'takeaway'>('counter');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [cartCustomerName, setCartCustomerName] = useState<string>('');
+  const [cartCustomerPhone, setCartCustomerPhone] = useState<string>('');
 
   useEffect(() => {
     // 1. Fetch live menu and orders from cloud
@@ -183,6 +194,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     setCart([]);
     setCartCustomerName('');
+    setCartCustomerPhone('');
   };
 
   const submitCartOrder = (): CafeOrder | null => {
@@ -203,6 +215,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tableId: cartDestination === 'table' ? selectedTableId : undefined,
       tableName,
       customerName: cartCustomerName || (tableName ? `Guest @ ${tableName}` : 'Counter Guest'),
+      customerPhone: cartCustomerPhone || undefined,
       items: cart.map(({ menuItemId, name, price, quantity, notes }) => ({
         menuItemId,
         name,
@@ -315,6 +328,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cartDestination,
         selectedTableId,
         cartCustomerName,
+        cartCustomerPhone,
         addToCart,
         removeFromCart,
         updateCartQuantity,
@@ -322,6 +336,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCartDestination,
         setSelectedTableId,
         setCartCustomerName,
+        setCartCustomerPhone,
         submitCartOrder,
         toggleItemAvailability,
         addMenuItem,

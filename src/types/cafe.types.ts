@@ -44,6 +44,7 @@ export interface CafeOrder {
   tableName?: string;
   customerId?: string;
   customerName?: string;
+  customerPhone?: string;
   items: OrderItem[];
   subtotal: number;
   status: KitchenStatus;

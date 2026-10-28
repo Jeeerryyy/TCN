@@ -11,7 +11,7 @@ import { useBilling } from '../../context/BillingContext';
 import { SettleBillModal } from '../billing/SettleBillModal';
 import { InvoiceReceipt } from '../billing/InvoiceReceipt';
 import { ManualNotebookEntryModal } from '../billing/ManualNotebookEntryModal';
-import { CheckCircle2, Clock, Wrench, BookOpen } from 'lucide-react';
+import { CheckCircle2, Clock, Wrench, BookOpen, Coffee } from 'lucide-react';
 import { FloorPlanSkeleton } from '../../components/ui/Skeleton';
 
 interface TableFloorPlanProps {
@@ -75,8 +75,21 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
           )}
           <button
             type="button"
+            onClick={() => {
+              setSelectedTableId('');
+              setCartDestination('counter');
+              onNavigateToCafePOS();
+            }}
+            className="flex items-center gap-1.5 bg-[#FFF4ED] border border-[#FF5900]/30 hover:bg-[#FF5900] hover:text-white px-2.5 sm:px-3 py-1.5 rounded-[6px] text-xs font-semibold text-[#FF5900] transition-colors shadow-sm ml-auto group"
+            title="Take separate snacks & drinks order without game table"
+          >
+            <Coffee className="w-3.5 h-3.5 text-[#FF5900] group-hover:text-white" />
+            <span>+ Snacks & Drinks Bill</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsManualModalOpen(true)}
-            className="flex items-center gap-1.5 bg-[#FFFFFF] border border-[#B9BBC6] hover:bg-[#F3F3F7] px-2.5 sm:px-3 py-1.5 rounded-[6px] text-xs font-semibold text-[#15191E] transition-colors shadow-sm ml-auto"
+            className="flex items-center gap-1.5 bg-[#FFFFFF] border border-[#B9BBC6] hover:bg-[#F3F3F7] px-2.5 sm:px-3 py-1.5 rounded-[6px] text-xs font-semibold text-[#15191E] transition-colors shadow-sm"
             title="Log missed or handwritten session from notebook"
           >
             <BookOpen className="w-3.5 h-3.5 text-[#FF5900]" />
