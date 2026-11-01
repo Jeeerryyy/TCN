@@ -38,6 +38,7 @@ interface CafeContextType {
 
   // Kitchen KOT Actions
   updateOrderStatus: (orderId: string, status: KitchenStatus) => void;
+  markOrdersBilled: (orderIds: string[], billId?: string) => void;
   deleteOrder: (orderId: string) => Promise<void>;
   activeKitchenOrders: CafeOrder[];
   isLoading: boolean;
@@ -293,16 +294,40 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOrders((prev) =>
       prev.map((order) => {
         if (order.id === orderId) {
-          const updated: CafeOrder = { ...order, status };
-          if (status === 'served') {
-            updated.servedAt = new Date().toISOString();
-          }
+          const updated: CafeOrder = {
+            ...order,
+            status,
+            servedAt: status === 'served' && !order.servedAt ? new Date().toISOString() : order.servedAt,
+          };
           dbService.syncOrder(updated);
           return updated;
         }
         return order;
       })
     );
+  };
+
+  const markOrdersBilled = (orderIds: string[], billId?: string) => {
+    if (!orderIds || orderIds.length === 0) return;
+    const idSet = new Set(orderIds);
+    setOrders((prev) => {
+      const next = prev.map((order) => {
+        if (idSet.has(order.id)) {
+          const updated: CafeOrder = {
+            ...order,
+            status: 'served',
+            isBilled: true,
+            billId: billId || order.billId,
+            servedAt: order.servedAt || new Date().toISOString(),
+          };
+          dbService.syncOrder(updated);
+          return updated;
+        }
+        return order;
+      });
+      saveToStorage('orders', next);
+      return next;
+    });
   };
 
   const deleteOrder = async (orderId: string) => {
@@ -344,6 +369,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteMenuItem,
         resetMenuToDefault,
         updateOrderStatus,
+        markOrdersBilled,
         deleteOrder,
         activeKitchenOrders,
         isLoading,

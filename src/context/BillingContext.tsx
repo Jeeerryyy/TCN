@@ -98,7 +98,7 @@ const BillingContext = createContext<BillingContextType | undefined>(undefined);
 
 export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { tables, activeSessionsMap, endSession, bookings } = useTables();
-  const { orders, updateOrderStatus } = useCafe();
+  const { orders, markOrdersBilled } = useCafe();
   const { customers, deductWallet, updateCustomer, addCustomer } = useCustomers();
 
   // Helper to ensure customer phone numbers from bookings & CRM are synced to bills
@@ -216,13 +216,12 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       session.ratePerMinute
     );
 
-    // Collect all active cafe orders linked to this session
+    // Collect only active, unbilled cafe orders explicitly linked to this live session
     const linkedOrders = orders.filter(
       (o) =>
         !o.isBilled &&
         o.status !== 'cancelled' &&
-        ((session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id)) ||
-          o.tableId === session.tableId)
+        Boolean(session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id))
     );
     const cafeCharge = linkedOrders.reduce((sum, o) => sum + o.subtotal, 0);
 
@@ -385,14 +384,14 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       (o) =>
         !o.isBilled &&
         o.status !== 'cancelled' &&
-        ((session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id)) ||
-          o.tableId === session.tableId)
+        Boolean(session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id))
     );
-    linkedOrders.forEach((o) => {
-      const updatedOrder = { ...o, status: 'served' as const, isBilled: true, billId: settledBill.id };
-      updateOrderStatus(o.id, 'served');
-      dbService.syncOrder(updatedOrder);
-    });
+    if (linkedOrders.length > 0) {
+      markOrdersBilled(
+        linkedOrders.map((o) => o.id),
+        settledBill.id
+      );
+    }
 
     // Finalize session & free up table
     endSession(options.tableId);
@@ -531,18 +530,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // If an existing orderId was passed, mark order as served and billed
     if (options.orderId) {
-      const orderToUpdate = existingOrder || orders.find((o) => o.id === options.orderId);
-      if (orderToUpdate) {
-        const updatedOrder = {
-          ...orderToUpdate,
-          status: 'served' as const,
-          isBilled: true,
-          billId: settledBill.id,
-          servedAt: new Date().toISOString(),
-        };
-        updateOrderStatus(orderToUpdate.id, 'served');
-        dbService.syncOrder(updatedOrder);
-      }
+      markOrdersBilled([options.orderId], settledBill.id);
     }
 
     setBills((prev) => [settledBill, ...prev]);

@@ -4,7 +4,7 @@
  */
 
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
-const CURRENT_STORAGE_VERSION = 'v4.0.0-clean-slate';
+const CURRENT_STORAGE_VERSION = 'v4.1.0-clean-cafe-orders';
 
 // Purge legacy local cache so client devices open with a 100% clean slate synced with Supabase
 const KEYS_TO_PURGE = [

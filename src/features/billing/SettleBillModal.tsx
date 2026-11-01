@@ -504,7 +504,7 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
 
           {/* Subtotal Display */}
           <div className="pt-2 border-t border-[#B9BBC6] flex justify-between text-xs font-semibold text-[#15191E]">
-            <span>Subtotal (Table + Beverages)</span>
+            <span>{itemsList.length > 0 ? 'Subtotal (Table + Beverages)' : 'Subtotal (Table Time)'}</span>
             <span className="font-mono font-bold text-sm text-[#15191E]">
               {formatINR(calculatedSubtotal)}
             </span>

@@ -83,8 +83,10 @@ export const TableCard: React.FC<TableCardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, tickCounter, table.minMinutes, table.ratePerHour, session?.ratePerMinute]);
 
-  // Total linked cafe items for this table
-  const linkedCafeOrders = orders.filter((o) => session?.linkedCafeOrderIds?.includes(o.id));
+  // Total linked cafe items for this table (only active, unbilled orders explicitly attached)
+  const linkedCafeOrders = orders.filter(
+    (o) => !o.isBilled && o.status !== 'cancelled' && Boolean(session?.linkedCafeOrderIds?.includes(o.id))
+  );
   const cafeTotal = linkedCafeOrders.reduce((sum, o) => sum + o.subtotal, 0);
 
   const isSnooker = table.type === 'snooker';
