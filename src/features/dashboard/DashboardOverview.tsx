@@ -28,14 +28,16 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { ActiveNavTab } from '../../components/layout/SidebarNav';
+import { DashboardAnalyticsCharts } from './DashboardAnalyticsCharts';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 
 interface DashboardOverviewProps {
   onNavigate: (tab: ActiveNavTab) => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  const { tables } = useTables();
-  const { activeKitchenOrders, setSelectedTableId, setCartDestination } = useCafe();
+  const { tables, sessions } = useTables();
+  const { orders, activeKitchenOrders, setSelectedTableId, setCartDestination } = useCafe();
   const { bills, activeBillModal, setActiveBillModal } = useBilling();
   const { customers } = useCustomers();
   const { isAdmin } = useAuth();
@@ -49,11 +51,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const occupiedTables = tables.filter((t) => t.status === 'occupied' || t.status === 'paused');
   const availableTables = tables.filter((t) => t.status === 'available');
 
+  // Running Tables counts (Pool vs Snooker)
+  const poolTables = tables.filter((t) => t.type === 'pool');
+  const snookerTables = tables.filter((t) => t.type === 'snooker');
+  const runningPoolCount = poolTables.filter((t) => t.status === 'occupied' || t.status === 'paused').length;
+  const runningSnookerCount = snookerTables.filter((t) => t.status === 'occupied' || t.status === 'paused').length;
+  const totalPoolCount = poolTables.length || 3;
+  const totalSnookerCount = snookerTables.length || 3;
+
   const todayStr = getLocalDateString();
-  const todayBills = bills.filter((b) => getBillDateString(b) === todayStr && b.status !== 'voided');
+  const todayBills = bills.filter((b) => getBillDateString(b) === todayStr && !b.isDeleted && b.status !== 'voided');
   const todayRevenue = todayBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
-  const overallBills = bills.filter((b) => b.status !== 'voided');
+  const overallBills = bills.filter((b) => !b.isDeleted && b.status !== 'voided');
   const overallRevenue = overallBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
   return (
@@ -112,6 +122,51 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
       </div>
 
+      {/* Live Running Tables Status Bar (Admin & Staff Real-time Counter) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        {/* Pool Running */}
+        <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)] hover:border-[#FF5900] transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-[8px] bg-[#FFF4ED] text-[#FF5900] flex items-center justify-center font-bold text-sm border border-[#FF5900]/30 shrink-0">
+              P
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[#15191E]">Pool Tables</div>
+              <div className="text-[11px] text-[#60646C]">
+                {totalPoolCount - runningPoolCount} of {totalPoolCount} tables vacant
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-[#FFF4ED] text-[#FF5900] border border-[#FF5900]/30 shadow-sm">
+              <span className={`w-2 h-2 rounded-full ${runningPoolCount > 0 ? 'bg-[#FF5900] animate-pulse' : 'bg-[#B9BBC6]'}`} />
+              Pool running: {runningPoolCount} / {totalPoolCount}
+            </span>
+          </div>
+        </div>
+
+        {/* Snooker Running */}
+        <div className="flex items-center justify-between p-3.5 sm:p-4 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)] hover:border-[#006EF5] transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-[8px] bg-[#D5E8FB] text-[#006EF5] flex items-center justify-center font-bold text-sm border border-[#006EF5]/30 shrink-0">
+              S
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-[#15191E]">Snooker Tables</div>
+              <div className="text-[11px] text-[#60646C]">
+                {totalSnookerCount - runningSnookerCount} of {totalSnookerCount} tables vacant
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-[#D5E8FB] text-[#006EF5] border border-[#006EF5]/30 shadow-sm">
+              <span className={`w-2 h-2 rounded-full ${runningSnookerCount > 0 ? 'bg-[#006EF5] animate-pulse' : 'bg-[#B9BBC6]'}`} />
+              Snooker running: {runningSnookerCount} / {totalSnookerCount}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* 4 Primary Operational Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* KPI 1: Revenue (Admin-Only with Live Per-Day vs Overall Switcher) OR Vacant Tables (Staff View) */}
@@ -143,22 +198,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <button
                   type="button"
                   onClick={() => setAdminRevenueMode('per_day')}
-                  className={`px-2 py-0.5 rounded-[4px] transition-all ${
-                    adminRevenueMode === 'per_day'
+                  className={`px-2 py-0.5 rounded-[4px] transition-all ${adminRevenueMode === 'per_day'
                       ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
                       : 'text-[#60646C] hover:text-[#000000]'
-                  }`}
+                    }`}
                 >
                   Per Day (Live)
                 </button>
                 <button
                   type="button"
                   onClick={() => setAdminRevenueMode('overall')}
-                  className={`px-2 py-0.5 rounded-[4px] transition-all ${
-                    adminRevenueMode === 'overall'
+                  className={`px-2 py-0.5 rounded-[4px] transition-all ${adminRevenueMode === 'overall'
                       ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
                       : 'text-[#60646C] hover:text-[#000000]'
-                  }`}
+                    }`}
                 >
                   Overall
                 </button>
@@ -260,6 +313,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
       </div>
+
+      {/* Admin Analytics Recharts Section (Performance Graphs) */}
+      {isAdmin && (
+        <ErrorBoundary fallbackTitle="Analytics Charts">
+          <DashboardAnalyticsCharts
+            bills={bills}
+            sessions={sessions}
+            orders={orders}
+          />
+        </ErrorBoundary>
+      )}
 
       {/* Active Floor Plan Real-Time Grid */}
       <div className="space-y-4">

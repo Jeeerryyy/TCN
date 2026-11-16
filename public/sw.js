@@ -53,9 +53,17 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. Completely bypass external APIs, Supabase requests, and non-GET requests
+  // 1. Completely bypass external APIs, localhost/dev servers, Vite chunks, and non-GET requests
   if (
     request.method !== 'GET' ||
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.port === '5173' ||
+    url.pathname.includes('/@vite') ||
+    url.pathname.includes('/node_modules') ||
+    url.pathname.includes('/src/') ||
+    url.search.includes('v=') ||
+    url.search.includes('t=') ||
     url.hostname.includes('supabase.co') ||
     url.protocol.startsWith('chrome-extension') ||
     url.pathname.startsWith('/api')

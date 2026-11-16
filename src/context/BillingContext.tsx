@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Bill, BillLineItem, PaymentMethod, SplitPaymentShare } from '../types/billing.types';
+import { Bill, BillLineItem, BillAuditEntry, PaymentMethod, SplitPaymentShare } from '../types/billing.types';
 import { INITIAL_BILLS } from '../data/mockBills';
 import { loadFromStorage, saveToStorage, clearBillsStorage } from '../utils/storage';
 import { useTables } from './TableContext';
@@ -21,6 +21,8 @@ export interface SettleSessionOptions {
   customerPhone?: string;
   customItems?: { name: string; quantity: number; price: number }[];
   tableChargeOverride?: number;
+  finalTotalOverride?: number;
+  editAuditEntry?: BillAuditEntry;
 }
 
 export interface SettleCafeBillOptions {
@@ -68,6 +70,19 @@ interface BillingContextType {
   settleQuickCafeBill: (orderId: string, paymentMethod: PaymentMethod) => Bill | null;
   settleStandaloneCafeBill: (options: SettleCafeBillOptions) => Bill | null;
   addManualBill: (input: ManualBillInput) => Bill;
+  editBillAmount: (
+    billId: string,
+    newAmount: number,
+    reason: string,
+    adminPin: string,
+    staffName: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  softDeleteBill: (
+    billId: string,
+    reason: string,
+    adminPin: string,
+    staffName: string
+  ) => Promise<{ success: boolean; error?: string }>;
   deleteBill: (billId: string) => Promise<void>;
   clearAllBills: () => Promise<void>;
   refreshBills: () => Promise<void>;
@@ -220,6 +235,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const linkedOrders = orders.filter(
       (o) =>
         !o.isBilled &&
+        !o.isDeleted &&
         o.status !== 'cancelled' &&
         Boolean(session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id))
     );
@@ -339,6 +355,9 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ? options.customerPhone.trim() || undefined
         : session.primaryCustomerPhone;
 
+    const effectiveFinalTotal =
+      options.finalTotalOverride !== undefined ? options.finalTotalOverride : finalTotal;
+
     const settledBill: Bill = {
       id: newBillId,
       invoiceNumber,
@@ -357,13 +376,14 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       discountAmount: discount,
       discountReason: options.discountReason || (folio.tierDiscountAmount > 0 ? 'Member Tier Privilege' : undefined),
       taxGstAmount: 0,
-      finalTotal,
+      finalTotal: effectiveFinalTotal,
       status: 'settled',
       paymentMethod: options.paymentMethod,
       splitDetails: options.splitShares,
       createdAt: session.startTime,
       settledAt: new Date().toISOString(),
       settledByStaff: options.cashierName || 'Floor Manager',
+      auditLog: options.editAuditEntry ? [options.editAuditEntry] : undefined,
     };
 
     // Update customer stats and phone if registered or new
@@ -383,6 +403,7 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const linkedOrders = orders.filter(
       (o) =>
         !o.isBilled &&
+        !o.isDeleted &&
         o.status !== 'cancelled' &&
         Boolean(session.linkedCafeOrderIds && session.linkedCafeOrderIds.includes(o.id))
     );
@@ -711,6 +732,91 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await dbService.deleteBillRemote(billId);
   };
 
+  const editBillAmount = async (
+    billId: string,
+    newAmount: number,
+    reason: string,
+    _adminPin: string,
+    staffName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (isNaN(newAmount) || newAmount < 0) {
+      return { success: false, error: 'Amount must be a valid positive number' };
+    }
+    if (!reason.trim()) {
+      return { success: false, error: 'Reason is required for bill adjustment' };
+    }
+
+    const targetBill = bills.find((b) => b.id === billId);
+    if (!targetBill) {
+      return { success: false, error: 'Invoice not found in register' };
+    }
+
+    const auditEntry: BillAuditEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      action: 'edit_amount',
+      originalAmount: targetBill.finalTotal,
+      newAmount,
+      changedBy: staffName || 'Manager (Admin)',
+      timestamp: new Date().toISOString(),
+      reason: reason.trim(),
+    };
+
+    const updatedBill: Bill = {
+      ...targetBill,
+      finalTotal: newAmount,
+      auditLog: [auditEntry, ...(targetBill.auditLog || [])],
+    };
+
+    setBills((prev) => {
+      const next = prev.map((b) => (b.id === billId ? updatedBill : b));
+      saveToStorage('bills', next);
+      return next;
+    });
+
+    await dbService.syncBill(updatedBill);
+    return { success: true };
+  };
+
+  const softDeleteBill = async (
+    billId: string,
+    reason: string,
+    _adminPin: string,
+    staffName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const targetBill = bills.find((b) => b.id === billId);
+    if (!targetBill) {
+      return { success: false, error: 'Invoice not found' };
+    }
+
+    const auditEntry: BillAuditEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      action: 'soft_delete',
+      originalAmount: targetBill.finalTotal,
+      newAmount: 0,
+      changedBy: staffName || 'Manager (Admin)',
+      timestamp: new Date().toISOString(),
+      reason: reason.trim() || 'Soft-deleted by Admin',
+    };
+
+    const updatedBill: Bill = {
+      ...targetBill,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: staffName || 'Manager (Admin)',
+      deleteReason: reason.trim(),
+      auditLog: [auditEntry, ...(targetBill.auditLog || [])],
+    };
+
+    setBills((prev) => {
+      const next = prev.map((b) => (b.id === billId ? updatedBill : b));
+      saveToStorage('bills', next);
+      return next;
+    });
+
+    await dbService.syncBill(updatedBill);
+    return { success: true };
+  };
+
   const clearAllBills = async () => {
     setBills([]);
     clearBillsStorage();
@@ -726,6 +832,8 @@ export const BillingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         settleQuickCafeBill,
         settleStandaloneCafeBill,
         addManualBill,
+        editBillAmount,
+        softDeleteBill,
         deleteBill,
         clearAllBills,
         refreshBills,

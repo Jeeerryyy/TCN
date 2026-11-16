@@ -56,6 +56,12 @@ export interface TableSession {
   
   // Attached Cafe Orders (Consolidated Billing)
   linkedCafeOrderIds: string[];
+
+  // Soft delete support
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: string;
 }
 
 export interface SessionTransferPayload {

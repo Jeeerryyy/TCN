@@ -26,6 +26,7 @@ interface TableContextType {
   resumeSession: (tableId: string) => void;
   transferSession: (fromTableId: string, toTableId: string, reason?: string) => boolean;
   endSession: (tableId: string) => TableSession | null;
+  softDeleteSession: (sessionId: string, reason: string, adminPin: string, staffName: string) => Promise<{ success: boolean; error?: string }>;
   linkCafeOrderToTable: (tableId: string, orderId: string) => void;
   setTableStatus: (tableId: string, status: TableStatus) => void;
   // Admin Table Studio Capabilities
@@ -182,7 +183,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const activeSessionsMap = useMemo(() => {
     const map: Record<string, TableSession> = {};
     for (const sess of sessions) {
-      if (sess.status !== 'completed' && !map[sess.tableId]) {
+      if (sess.status !== 'completed' && !sess.isDeleted && !map[sess.tableId]) {
         map[sess.tableId] = sess;
       }
     }
@@ -190,7 +191,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Guarantee that if a table is occupied or paused in cloud, an active session entry always exists
     for (const table of tables) {
       if ((table.status === 'occupied' || table.status === 'paused') && !map[table.id]) {
-        const latestSession = sessions.find((s) => s.tableId === table.id && s.status !== 'completed');
+        const latestSession = sessions.find((s) => s.tableId === table.id && s.status !== 'completed' && !s.isDeleted);
         if (latestSession) {
           map[table.id] = latestSession;
         } else {
@@ -371,6 +372,45 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return finalSession;
   };
 
+  const softDeleteSession = async (
+    sessionId: string,
+    reason: string,
+    _adminPin: string,
+    staffName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = sessions.find((s) => s.id === sessionId);
+    if (!target) return { success: false, error: 'Session not found' };
+
+    const updated: TableSession = {
+      ...target,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: staffName,
+      deleteReason: reason,
+    };
+
+    setSessions((prev) => {
+      const next = prev.map((s) => (s.id === sessionId ? updated : s));
+      saveToStorage('sessions', next);
+      return next;
+    });
+
+    // If this session was active on a table, free the table!
+    const table = tables.find((t) => t.id === target.tableId);
+    if (table && (table.currentSessionId === sessionId || table.status === 'occupied' || table.status === 'paused')) {
+      const updatedTable: Table = {
+        ...table,
+        status: 'available',
+        currentSessionId: undefined,
+      };
+      setTables((prev) => prev.map((t) => (t.id === table.id ? updatedTable : t)));
+      dbService.syncTable(updatedTable);
+    }
+
+    await dbService.syncSession(updated);
+    return { success: true };
+  };
+
   const linkCafeOrderToTable = (tableId: string, orderId: string) => {
     const active = activeSessionsMap[tableId];
     if (!active) return;
@@ -520,6 +560,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         resumeSession,
         transferSession,
         endSession,
+        softDeleteSession,
         linkCafeOrderToTable,
         setTableStatus,
         addTable,

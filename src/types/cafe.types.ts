@@ -52,4 +52,10 @@ export interface CafeOrder {
   billId?: string;
   createdAt: string; // ISO string
   servedAt?: string;
+
+  // Soft delete support
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: string;
 }

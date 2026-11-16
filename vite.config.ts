@@ -8,22 +8,19 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      react: path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
     },
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'recharts', 'lucide-react', 'clsx', 'tailwind-merge'],
   },
   server: {
     port: 5173,
     host: true,
   },
   build: {
-    chunkSizeWarningLimit: 600,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          icons: ['lucide-react'],
-          supabase: ['@supabase/supabase-js'],
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1000,
   },
 });

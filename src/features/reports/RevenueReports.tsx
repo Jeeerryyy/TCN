@@ -56,23 +56,8 @@ export const RevenueReports: React.FC = () => {
   const [selectedLedgerDate, setSelectedLedgerDate] = useState<string>(todayStr);
   const [ledgerSearch, setLedgerSearch] = useState<string>('');
 
-  // Staff Security Guard: Never expose total revenue to staff
-  if (!isAdmin) {
-    return (
-      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-8 text-center max-w-lg mx-auto my-12 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
-        <div className="w-12 h-12 rounded-full bg-[#FFF1F0] text-[#FF4D4F] flex items-center justify-center mx-auto mb-4 border border-[#FFCCC7]">
-          <ShieldCheck className="w-6 h-6" />
-        </div>
-        <h3 className="text-lg font-medium text-[#000000]">Executive Access Required</h3>
-        <p className="text-xs text-[#60646C] mt-2 leading-relaxed">
-          Total revenue analytics and shift financial audits are restricted to Administrative Executives. Floor staff cannot view cumulative revenue totals.
-        </p>
-      </div>
-    );
-  }
-
   // --- Aggregate Statistics (All-Time / Overall) ---
-  const validBills = useMemo(() => bills.filter((b) => b.status !== 'voided'), [bills]);
+  const validBills = useMemo(() => bills.filter((b) => !b.isDeleted && b.status !== 'voided'), [bills]);
 
   const totalGrossRevenue = useMemo(
     () => validBills.reduce((sum, b) => sum + b.finalTotal, 0),
@@ -208,6 +193,21 @@ export const RevenueReports: React.FC = () => {
     window.print();
   };
 
+  // Staff Security Guard: Never expose total revenue to staff
+  if (!isAdmin) {
+    return (
+      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-8 text-center max-w-lg mx-auto my-12 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+        <div className="w-12 h-12 rounded-full bg-[#FFF1F0] text-[#FF4D4F] flex items-center justify-center mx-auto mb-4 border border-[#FFCCC7]">
+          <ShieldCheck className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-medium text-[#000000]">Executive Access Required</h3>
+        <p className="text-xs text-[#60646C] mt-2 leading-relaxed">
+          Total revenue analytics and shift financial audits are restricted to Administrative Executives. Floor staff cannot view cumulative revenue totals.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Executive Header with View Option Switcher */}
@@ -238,11 +238,10 @@ export const RevenueReports: React.FC = () => {
                 setReportView('per_day');
                 setSelectedLedgerDate(todayStr);
               }}
-              className={`px-3 py-1.5 rounded-[6px] flex items-center gap-1.5 transition-all ${
-                reportView === 'per_day'
+              className={`px-3 py-1.5 rounded-[6px] flex items-center gap-1.5 transition-all ${reportView === 'per_day'
                   ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_2px_4px_rgba(0,0,0,0.08)]'
                   : 'text-[#60646C] hover:text-[#000000]'
-              }`}
+                }`}
             >
               <span className="w-2 h-2 rounded-full bg-[#0D9926] animate-pulse" />
               Per-Day Revenue (Live)
@@ -250,11 +249,10 @@ export const RevenueReports: React.FC = () => {
             <button
               type="button"
               onClick={() => setReportView('overall')}
-              className={`px-3 py-1.5 rounded-[6px] flex items-center gap-1.5 transition-all ${
-                reportView === 'overall'
+              className={`px-3 py-1.5 rounded-[6px] flex items-center gap-1.5 transition-all ${reportView === 'overall'
                   ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_2px_4px_rgba(0,0,0,0.08)]'
                   : 'text-[#60646C] hover:text-[#000000]'
-              }`}
+                }`}
             >
               <Layers className="w-3.5 h-3.5" />
               Overall Revenue
@@ -503,11 +501,10 @@ export const RevenueReports: React.FC = () => {
                       <tr
                         key={record.dateStr}
                         onClick={() => setSelectedLedgerDate(record.dateStr)}
-                        className={`cursor-pointer transition-colors ${
-                          isSelected
+                        className={`cursor-pointer transition-colors ${isSelected
                             ? 'bg-[#FFF8F0] font-medium'
                             : 'hover:bg-[#F3F3F7]'
-                        }`}
+                          }`}
                       >
                         <td className="py-2.5 px-3 text-[#15191E]">
                           <div className="font-semibold">{formatFriendlyDate(record.dateStr)}</div>
@@ -546,11 +543,10 @@ export const RevenueReports: React.FC = () => {
                               e.stopPropagation();
                               setSelectedLedgerDate(record.dateStr);
                             }}
-                            className={`px-2 py-1 rounded-[4px] text-[10px] font-semibold transition-colors ${
-                              isSelected
+                            className={`px-2 py-1 rounded-[4px] text-[10px] font-semibold transition-colors ${isSelected
                                 ? 'bg-[#FF5900] text-white'
                                 : 'bg-[#FFFFFF] border border-[#B9BBC6] text-[#15191E] hover:bg-[#F3F3F7]'
-                            }`}
+                              }`}
                           >
                             {isSelected ? 'Viewing' : 'Inspect'}
                           </button>

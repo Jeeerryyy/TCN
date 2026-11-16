@@ -26,7 +26,14 @@ import {
   Phone,
   Clock,
   CupSoda,
+  FileEdit,
+  KeyRound,
+  ShieldCheck,
+  Utensils,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { TableCafeItemsModal } from '../tables/TableCafeItemsModal';
+import { AdminDeleteConfirmModal } from '../../components/ui/AdminDeleteConfirmModal';
 import { useToast } from '../../context/ToastContext';
 
 interface SettleBillModalProps {
@@ -49,14 +56,27 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
   onClose,
 }) => {
   const { getPendingFolioForTable, settleTableBill } = useBilling();
-  const { activeSessionsMap } = useTables();
+  const { activeSessionsMap, softDeleteSession } = useTables();
   const { customers } = useCustomers();
   const { menu } = useCafe();
+  const { pins, currentUser } = useAuth();
   const { warning, success } = useToast();
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi');
   const [customDiscount, setCustomDiscount] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState<string>('');
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
+
+  // Café items sheet state
+  const [isCafeSheetOpen, setIsCafeSheetOpen] = useState(false);
+
+  // Live bill amount edit (Admin)
+  const [isEditLiveAmountOpen, setIsEditLiveAmountOpen] = useState(false);
+  const [amountOverride, setAmountOverride] = useState<number | null>(null);
+  const [editAmountInput, setEditAmountInput] = useState<number | ''>('');
+  const [amountOverrideReason, setAmountOverrideReason] = useState<string>('');
+  const [adminPinInput, setAdminPinInput] = useState<string>('');
+  const [editPinError, setEditPinError] = useState<string | null>(null);
 
   // Editable guest details
   const [guestName, setGuestName] = useState('');
@@ -92,6 +112,10 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
       setCustomItemPrice('');
       setSelectedMenuItemId('');
       setAddQuantity(1);
+      setAmountOverride(null);
+      setAmountOverrideReason('');
+      setAdminPinInput('');
+      setEditPinError(null);
 
       // Populate initial café items from table folio
       const initialItems: EditableBillItem[] = folio.cafeItems.map((item, idx) => ({
@@ -116,7 +140,8 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
   const currentCafeTotal = itemsList.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const calculatedSubtotal = folio.tableCharge + currentCafeTotal;
   const totalDiscount = folio.tierDiscountAmount + (customDiscount || 0);
-  const finalTotal = Math.max(0, calculatedSubtotal - totalDiscount);
+  const standardFinalTotal = Math.max(0, calculatedSubtotal - totalDiscount);
+  const finalTotal = amountOverride !== null ? amountOverride : standardFinalTotal;
 
   // Line item handlers
   const handleRemoveItem = (id: string) => {
@@ -235,6 +260,19 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
         price: item.price,
       })),
       tableChargeOverride: folio.tableCharge,
+      finalTotalOverride: amountOverride !== null ? amountOverride : undefined,
+      editAuditEntry:
+        amountOverride !== null
+          ? {
+              id: `audit_settle_${Date.now()}`,
+              action: 'edit_amount',
+              originalAmount: standardFinalTotal,
+              newAmount: amountOverride,
+              changedBy: currentUser?.name || 'Administrator',
+              timestamp: new Date().toISOString(),
+              reason: amountOverrideReason || 'Final amount adjusted at settlement',
+            }
+          : undefined,
     });
 
     if (bill) {
@@ -255,6 +293,7 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
   ];
 
   return (
+    <>
     <Modal
       isOpen={isOpen}
       onClose={onClose}
@@ -342,9 +381,20 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
               <span className="text-[10px] font-semibold text-[#60646C] uppercase tracking-wider flex items-center gap-1">
                 <CupSoda className="w-3.5 h-3.5 text-[#006EF5]" /> Beverages & Café Items ({itemsList.length})
               </span>
-              <span className="text-[11px] text-[#60646C] font-mono">
-                Tab: {formatINR(currentCafeTotal)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-[#60646C] font-mono">
+                  Tab: {formatINR(currentCafeTotal)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCafeSheetOpen(true)}
+                  className="px-2 py-0.5 rounded-[4px] bg-[#FFFFFF] border border-[#B9BBC6] hover:bg-[#F3F3F7] text-[11px] font-semibold text-[#006EF5] flex items-center gap-1 transition-colors"
+                  title="Open full Café Items sheet to manage drinks and snacks"
+                >
+                  <Utensils className="w-3 h-3" />
+                  <span>Café Items</span>
+                </button>
+              </div>
             </div>
 
             {itemsList.length === 0 ? (
@@ -543,7 +593,34 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
           {/* Grand Total */}
           <div className="pt-2 border-t border-[#B9BBC6]">
             <div className="flex justify-between items-center text-sm font-semibold">
-              <span className="text-[#15191E]">Final Amount to Collect</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[#15191E]">Final Amount to Collect</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditAmountInput(amountOverride !== null ? amountOverride : standardFinalTotal);
+                    setAmountOverrideReason(amountOverrideReason || '');
+                    setAdminPinInput('');
+                    setEditPinError(null);
+                    setIsEditLiveAmountOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#FF5900] bg-[#FFF4ED] hover:bg-[#FFE8D6] px-2 py-0.5 rounded border border-[#FF5900]/30 transition-colors"
+                  title="Edit final settlement amount (Admin PIN required)"
+                >
+                  <FileEdit className="w-3 h-3" />
+                  <span>Edit Bill</span>
+                </button>
+                {amountOverride !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setAmountOverride(null)}
+                    className="text-[10px] text-[#0D9926] hover:text-[#CF1322] font-mono font-bold bg-[#EBF7EE] px-1.5 py-0.5 rounded border border-[#0D9926]/30"
+                    title="Click to reset to standard calculated total"
+                  >
+                    Adjusted: {formatINR(amountOverride)} ✕
+                  </button>
+                )}
+              </div>
               <span className="text-xl font-mono text-[#FF5900] font-bold">
                 {formatINR(finalTotal)}
               </span>
@@ -629,28 +706,208 @@ export const SettleBillModal: React.FC<SettleBillModalProps> = ({
           </div>
         )}
 
-        {/* Action Controls - Final Done Button */}
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-3 border-t border-[#B9BBC6]">
-          <Button
-            variant="secondary"
-            size="md"
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto h-[44px] sm:h-auto"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="lg"
-            type="submit"
-            icon={<Check className="w-5 h-5 text-white" />}
-            className="w-full sm:w-auto h-[44px] sm:h-auto font-bold text-sm bg-[#0D9926] hover:bg-[#0B8220] active:bg-[#096B1A] border-none shadow-md"
-          >
-            ✓ Final Done — Generate Bill ({formatINR(finalTotal)})
-          </Button>
+        {/* Action Controls - Delete, Cancel & Final Done Button */}
+        <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-2 pt-3 border-t border-[#B9BBC6]">
+          {session ? (
+            <button
+              type="button"
+              onClick={() => setIsDeletingSession(true)}
+              className="text-xs text-[#8B8D98] hover:text-[#CF1322] flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-[#FFF1F0] transition-colors self-start sm:self-auto"
+              title="Delete session without billing (Admin PIN required)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete / Void Session</span>
+            </button>
+          ) : <div />}
+
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button
+              variant="secondary"
+              size="md"
+              type="button"
+              onClick={onClose}
+              className="w-full sm:w-auto h-[44px] sm:h-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              type="submit"
+              icon={<Check className="w-5 h-5 text-white" />}
+              className="w-full sm:w-auto h-[44px] sm:h-auto font-bold text-sm bg-[#0D9926] hover:bg-[#0B8220] active:bg-[#096B1A] border-none shadow-md"
+            >
+              ✓ Final Done — Generate Bill ({formatINR(finalTotal)})
+            </Button>
+          </div>
         </div>
       </form>
     </Modal>
+
+    {/* Interactive Café Items Sheet */}
+    <TableCafeItemsModal
+      table={table}
+      session={session}
+      isOpen={isCafeSheetOpen}
+      onClose={() => {
+        setIsCafeSheetOpen(false);
+        const updatedFolio = getPendingFolioForTable(table.id);
+        if (updatedFolio) {
+          setItemsList(
+            updatedFolio.cafeItems.map((item, idx) => ({
+              id: `folio_${idx}_${Date.now()}`,
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+            }))
+          );
+        }
+      }}
+    />
+
+    {/* Live Session Bill Amount Override Modal */}
+    {isEditLiveAmountOpen && (
+      <Modal
+        isOpen={isEditLiveAmountOpen}
+        onClose={() => setIsEditLiveAmountOpen(false)}
+        title="Edit Live Bill Amount"
+        maxWidth="md"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setEditPinError(null);
+            const amt = Number(editAmountInput);
+            if (isNaN(amt) || amt < 0) {
+              setEditPinError('Please enter a valid positive amount.');
+              return;
+            }
+            if (!amountOverrideReason.trim()) {
+              setEditPinError('Please enter a reason for adjusting the bill amount.');
+              return;
+            }
+            if (adminPinInput.trim() !== pins.admin) {
+              setEditPinError('Incorrect Admin PIN. Access denied.');
+              return;
+            }
+            setAmountOverride(amt);
+            setIsEditLiveAmountOpen(false);
+            success(`Final amount set to ${formatINR(amt)}.`, 'Amount Overridden');
+          }}
+          className="space-y-4"
+        >
+          <div className="bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] p-3 text-xs space-y-1">
+            <div className="flex justify-between items-center text-[#60646C]">
+              <span>Table: <strong className="text-[#15191E]">{table.name}</strong></span>
+              <span>Calculated Total: <strong className="text-[#15191E] font-mono">{formatINR(standardFinalTotal)}</strong></span>
+            </div>
+            <p className="text-[11px] text-[#60646C]">
+              Only the final settlement amount will be overridden. Time and café tab items remain logged.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#15191E] mb-1">
+              New Settlement Total (₹) <span className="text-[#FF5900]">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-xs text-[#8B8D98]">₹</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                required
+                value={editAmountInput}
+                onChange={(e) => setEditAmountInput(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full h-[40px] pl-7 pr-3 font-mono font-bold text-sm bg-white border border-[#B9BBC6] rounded-[6px] text-[#15191E] focus:outline-none focus:border-[#FF5900]"
+                placeholder="Enter adjusted final total"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#15191E] mb-1">
+              Reason for Adjustment <span className="text-[#FF5900]">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={amountOverrideReason}
+              onChange={(e) => setAmountOverrideReason(e.target.value)}
+              placeholder="e.g. VIP courtesy / bill dispute settled"
+              className="w-full h-[38px] px-3 text-xs bg-white border border-[#B9BBC6] rounded-[6px] text-[#15191E] focus:outline-none focus:border-[#FF5900]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#15191E] mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-[#FF5900]" /> Admin Authorization PIN <span className="text-[#FF5900]">*</span>
+              </span>
+              <span className="text-[10px] text-[#8B8D98] font-mono">Default: 8888</span>
+            </label>
+            <input
+              type="password"
+              maxLength={4}
+              required
+              value={adminPinInput}
+              onChange={(e) => setAdminPinInput(e.target.value.replace(/\D/g, ''))}
+              placeholder="Enter 4-digit Admin PIN"
+              className="w-full h-[38px] px-3 text-center tracking-[0.5em] font-mono font-bold text-sm bg-white border border-[#B9BBC6] rounded-[6px] text-[#15191E] focus:outline-none focus:border-[#FF5900]"
+            />
+          </div>
+
+          {editPinError && (
+            <div className="text-xs text-[#CF1322] font-semibold bg-[#FFF1F0] p-2 rounded border border-[#FFCCC7]">
+              {editPinError}
+            </div>
+          )}
+
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-[#B9BBC6]">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsEditLiveAmountOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={adminPinInput.length !== 4 || !amountOverrideReason.trim() || editAmountInput === ''}
+              icon={<ShieldCheck className="w-4 h-4" />}
+            >
+              Apply Override
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    )}
+
+    {/* Soft Delete Session Modal */}
+    {isDeletingSession && session && table && (
+      <AdminDeleteConfirmModal
+        isOpen={isDeletingSession}
+        onClose={() => setIsDeletingSession(false)}
+        title={`Delete Session - ${table.name}`}
+        entityType="session"
+        itemDetails={`${table.name} (${table.type.toUpperCase()}) · Guest: ${session.primaryCustomerName} · Started: ${formatTimeOnly(session.startTime)}`}
+        onConfirm={async (reason, pin) => {
+          const res = await softDeleteSession(
+            session.id,
+            reason,
+            pin,
+            currentUser?.name || 'Administrator'
+          );
+          if (res.success) {
+            onClose();
+          }
+          return res;
+        }}
+      />
+    )}
+    </>
   );
 };

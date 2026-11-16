@@ -17,7 +17,7 @@ interface CafeContextType {
   selectedTableId: string;
   cartCustomerName: string;
   cartCustomerPhone: string;
-  
+
   // Cart Actions
   addToCart: (item: MenuItem, notes?: string) => void;
   removeFromCart: (cartItemId: string) => void;
@@ -40,6 +40,13 @@ interface CafeContextType {
   updateOrderStatus: (orderId: string, status: KitchenStatus) => void;
   markOrdersBilled: (orderIds: string[], billId?: string) => void;
   deleteOrder: (orderId: string) => Promise<void>;
+  softDeleteOrder: (orderId: string, reason: string, adminPin: string, staffName: string) => Promise<{ success: boolean; error?: string }>;
+
+  // Table Attached Orders Management
+  addItemToTableOrder: (tableId: string, item: { menuItemId?: string; name: string; price: number; quantity: number; notes?: string }) => CafeOrder;
+  updateTableOrderItemQty: (orderId: string, itemIndex: number, delta: number) => void;
+  removeTableOrderItem: (orderId: string, itemIndex: number) => void;
+
   activeKitchenOrders: CafeOrder[];
   isLoading: boolean;
   isSyncing: boolean;
@@ -203,7 +210,7 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const orderNumber = `ORD-${Date.now().toString().slice(-4)}`;
-    
+
     let tableName: string | undefined;
     if (cartDestination === 'table' && selectedTableId) {
       tableName = tables.find((t) => t.id === selectedTableId)?.name;
@@ -339,9 +346,179 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await dbService.deleteOrderRemote(orderId);
   };
 
+  const softDeleteOrder = async (
+    orderId: string,
+    reason: string,
+    _adminPin: string,
+    staffName: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return { success: false, error: 'Order not found' };
+
+    const updated: CafeOrder = {
+      ...target,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+      deletedBy: staffName,
+      deleteReason: reason,
+    };
+
+    setOrders((prev) => {
+      const next = prev.map((o) => (o.id === orderId ? updated : o));
+      saveToStorage('orders', next);
+      return next;
+    });
+
+    await dbService.syncOrder(updated);
+    return { success: true };
+  };
+
+  const addItemToTableOrder = (
+    tableId: string,
+    item: { menuItemId?: string; name: string; price: number; quantity: number; notes?: string }
+  ): CafeOrder => {
+    const tableName = tables.find((t) => t.id === tableId)?.name || 'Active Table';
+
+    // Find active unbilled order for this table
+    const existingOrderIndex = orders.findIndex(
+      (o) => o.tableId === tableId && !o.isBilled && !o.isDeleted && o.status !== 'cancelled'
+    );
+
+    let updatedOrder: CafeOrder;
+
+    if (existingOrderIndex > -1) {
+      const existing = orders[existingOrderIndex];
+      const existingItemIndex = existing.items.findIndex(
+        (i) => i.name.toLowerCase() === item.name.toLowerCase()
+      );
+
+      let nextItems = [...existing.items];
+      if (existingItemIndex > -1) {
+        nextItems[existingItemIndex] = {
+          ...nextItems[existingItemIndex],
+          quantity: nextItems[existingItemIndex].quantity + item.quantity,
+        };
+      } else {
+        nextItems.push({
+          menuItemId: item.menuItemId || `custom_${Date.now()}`,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          notes: item.notes,
+        });
+      }
+
+      const nextSubtotal = nextItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      updatedOrder = {
+        ...existing,
+        items: nextItems,
+        subtotal: nextSubtotal,
+      };
+
+      setOrders((prev) => {
+        const next = [...prev];
+        next[existingOrderIndex] = updatedOrder;
+        saveToStorage('orders', next);
+        return next;
+      });
+    } else {
+      const orderNumber = `ORD-${Date.now().toString().slice(-4)}`;
+      updatedOrder = {
+        id: `ord_${Date.now()}`,
+        orderNumber,
+        destination: 'table',
+        tableId,
+        tableName,
+        customerName: `Guest @ ${tableName}`,
+        items: [
+          {
+            menuItemId: item.menuItemId || `custom_${Date.now()}`,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            notes: item.notes,
+          },
+        ],
+        subtotal: item.price * item.quantity,
+        status: 'pending',
+        isBilled: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setOrders((prev) => {
+        const next = [updatedOrder, ...prev];
+        saveToStorage('orders', next);
+        return next;
+      });
+
+      linkCafeOrderToTable(tableId, updatedOrder.id);
+    }
+
+    dbService.syncOrder(updatedOrder);
+    return updatedOrder;
+  };
+
+  const updateTableOrderItemQty = (orderId: string, itemIndex: number, delta: number) => {
+    setOrders((prev) => {
+      const orderIdx = prev.findIndex((o) => o.id === orderId);
+      if (orderIdx === -1) return prev;
+      const order = prev[orderIdx];
+      if (!order.items[itemIndex]) return prev;
+
+      let nextItems = [...order.items];
+      const newQty = nextItems[itemIndex].quantity + delta;
+
+      if (newQty <= 0) {
+        nextItems.splice(itemIndex, 1);
+      } else {
+        nextItems[itemIndex] = {
+          ...nextItems[itemIndex],
+          quantity: newQty,
+        };
+      }
+
+      const nextSubtotal = nextItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      const updatedOrder: CafeOrder = {
+        ...order,
+        items: nextItems,
+        subtotal: nextSubtotal,
+        status: nextItems.length === 0 ? 'cancelled' : order.status,
+      };
+
+      const nextOrders = [...prev];
+      nextOrders[orderIdx] = updatedOrder;
+      saveToStorage('orders', nextOrders);
+      dbService.syncOrder(updatedOrder);
+      return nextOrders;
+    });
+  };
+
+  const removeTableOrderItem = (orderId: string, itemIndex: number) => {
+    setOrders((prev) => {
+      const orderIdx = prev.findIndex((o) => o.id === orderId);
+      if (orderIdx === -1) return prev;
+      const order = prev[orderIdx];
+
+      const nextItems = order.items.filter((_, idx) => idx !== itemIndex);
+      const nextSubtotal = nextItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
+      const updatedOrder: CafeOrder = {
+        ...order,
+        items: nextItems,
+        subtotal: nextSubtotal,
+        status: nextItems.length === 0 ? 'cancelled' : order.status,
+      };
+
+      const nextOrders = [...prev];
+      nextOrders[orderIdx] = updatedOrder;
+      saveToStorage('orders', nextOrders);
+      dbService.syncOrder(updatedOrder);
+      return nextOrders;
+    });
+  };
+
   // Orders that are currently pending, cooking, or ready in kitchen
   const activeKitchenOrders = orders.filter(
-    (o) => o.status === 'pending' || o.status === 'cooking' || o.status === 'ready'
+    (o) => !o.isDeleted && (o.status === 'pending' || o.status === 'cooking' || o.status === 'ready')
   );
 
   return (
@@ -371,6 +548,10 @@ export const CafeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateOrderStatus,
         markOrdersBilled,
         deleteOrder,
+        softDeleteOrder,
+        addItemToTableOrder,
+        updateTableOrderItemQty,
+        removeTableOrderItem,
         activeKitchenOrders,
         isLoading,
         isSyncing,

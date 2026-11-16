@@ -133,6 +133,10 @@ function mapRowToSession(row: Record<string, any>): TableSession {
   let playerNames: string[] = [String(row.customer_name || 'Player 1')];
   let linkedCafeOrderIds: string[] = [];
   let userNotes: string | undefined = row.notes ? String(row.notes) : undefined;
+  let isDeleted = false;
+  let deletedAt: string | undefined = undefined;
+  let deletedBy: string | undefined = undefined;
+  let deleteReason: string | undefined = undefined;
 
   if (row.notes && typeof row.notes === 'string' && row.notes.trim().startsWith('{')) {
     try {
@@ -144,6 +148,10 @@ function mapRowToSession(row: Record<string, any>): TableSession {
         if (Array.isArray(parsed.linkedCafeOrderIds)) {
           linkedCafeOrderIds = parsed.linkedCafeOrderIds;
         }
+        if (parsed.isDeleted) isDeleted = true;
+        if (parsed.deletedAt) deletedAt = parsed.deletedAt;
+        if (parsed.deletedBy) deletedBy = parsed.deletedBy;
+        if (parsed.deleteReason) deleteReason = parsed.deleteReason;
         userNotes = parsed.notes || undefined;
       }
     } catch {
@@ -172,6 +180,10 @@ function mapRowToSession(row: Record<string, any>): TableSession {
     status: (row.status as 'active' | 'paused' | 'completed') || 'active',
     notes: userNotes,
     linkedCafeOrderIds,
+    isDeleted,
+    deletedAt,
+    deletedBy,
+    deleteReason,
   };
 }
 
@@ -218,6 +230,11 @@ function mapRowToBill(row: Record<string, any>): Bill {
   let sessionEndTime = row.settled_at ? String(row.settled_at) : undefined;
   let isManualEntry = false;
   let notes: string | undefined = undefined;
+  let auditLog: any[] = [];
+  let isDeleted = false;
+  let deletedAt: string | undefined = undefined;
+  let deletedBy: string | undefined = undefined;
+  let deleteReason: string | undefined = undefined;
 
   if (row.discount_reason && typeof row.discount_reason === 'string' && row.discount_reason.trim().startsWith('{')) {
     try {
@@ -229,6 +246,11 @@ function mapRowToBill(row: Record<string, any>): Bill {
         if (parsed.sessionEndTime) sessionEndTime = parsed.sessionEndTime;
         if (parsed.isManualEntry) isManualEntry = true;
         if (parsed.notes) notes = parsed.notes;
+        if (Array.isArray(parsed.auditLog)) auditLog = parsed.auditLog;
+        if (parsed.isDeleted) isDeleted = true;
+        if (parsed.deletedAt) deletedAt = parsed.deletedAt;
+        if (parsed.deletedBy) deletedBy = parsed.deletedBy;
+        if (parsed.deleteReason) deleteReason = parsed.deleteReason;
         discountReason = parsed.reason || undefined;
       }
     } catch {
@@ -296,14 +318,36 @@ function mapRowToBill(row: Record<string, any>): Bill {
     settledByStaff: String(row.settled_by || 'Floor Manager'),
     isManualEntry: isManualEntry || undefined,
     notes: notes || undefined,
+    auditLog: auditLog.length > 0 ? auditLog : undefined,
+    isDeleted,
+    deletedAt,
+    deletedBy,
+    deleteReason,
   };
 }
 
 function mapRowToOrder(row: Record<string, any>): CafeOrder {
   let items: any[] = [];
+  let isDeleted = false;
+  let deletedAt: string | undefined = undefined;
+  let deletedBy: string | undefined = undefined;
+  let deleteReason: string | undefined = undefined;
+  let billId: string | undefined = row.bill_id ? String(row.bill_id) : undefined;
+  let servedAt: string | undefined = row.served_at ? String(row.served_at) : undefined;
+
   if (typeof row.items === 'string') {
     try {
-      items = JSON.parse(row.items);
+      const parsed = JSON.parse(row.items);
+      if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.items)) items = parsed.items;
+        else if (Array.isArray(parsed)) items = parsed;
+        if (parsed.isDeleted) isDeleted = true;
+        if (parsed.deletedAt) deletedAt = parsed.deletedAt;
+        if (parsed.deletedBy) deletedBy = parsed.deletedBy;
+        if (parsed.deleteReason) deleteReason = parsed.deleteReason;
+        if (parsed.billId) billId = parsed.billId;
+        if (parsed.servedAt) servedAt = parsed.servedAt;
+      }
     } catch {
       items = [];
     }
@@ -322,7 +366,13 @@ function mapRowToOrder(row: Record<string, any>): CafeOrder {
     subtotal: Number(row.subtotal) || 0,
     status: (row.status as any) || 'pending',
     isBilled: Boolean(row.is_billed),
+    billId,
+    servedAt,
     createdAt: String(row.created_at || new Date().toISOString()),
+    isDeleted,
+    deletedAt,
+    deletedBy,
+    deleteReason,
   };
 }
 
@@ -605,6 +655,10 @@ export const dbService = {
         notes: session.notes || null,
         playerNames: session.playerNames || [],
         linkedCafeOrderIds: session.linkedCafeOrderIds || [],
+        isDeleted: session.isDeleted || false,
+        deletedAt: session.deletedAt || null,
+        deletedBy: session.deletedBy || null,
+        deleteReason: session.deleteReason || null,
       };
 
       const { error } = await supabase.from('game_sessions').upsert({
@@ -632,6 +686,21 @@ export const dbService = {
     } catch (e) {
       console.warn('[DB Sync] Session sync deferred, queued offline:', e);
       enqueueOfflineMutation({ type: 'session', action: 'UPSERT', payload: session });
+    }
+  },
+
+  async deleteSessionRemote(sessionId: string): Promise<void> {
+    broadcastLocally('session', { id: sessionId } as TableSession, 'DELETE');
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      enqueueOfflineMutation({ type: 'session', action: 'DELETE', payload: { id: sessionId } });
+      return;
+    }
+    try {
+      await supabase.from('game_sessions').delete().eq('id', sessionId);
+    } catch (e) {
+      console.warn('[DB Sync] Session delete deferred, queued offline:', e);
+      enqueueOfflineMutation({ type: 'session', action: 'DELETE', payload: { id: sessionId } });
     }
   },
 
@@ -708,6 +777,11 @@ export const dbService = {
         sessionEndTime: bill.sessionEndTime,
         isManualEntry: bill.isManualEntry || false,
         notes: bill.notes || null,
+        auditLog: bill.auditLog || [],
+        isDeleted: bill.isDeleted || false,
+        deletedAt: bill.deletedAt || null,
+        deletedBy: bill.deletedBy || null,
+        deleteReason: bill.deleteReason || null,
       };
 
       const { error } = await supabase.from('bills').upsert({
@@ -829,6 +903,16 @@ export const dbService = {
       return;
     }
     try {
+      const orderMeta = {
+        items: order.items,
+        isDeleted: order.isDeleted || false,
+        deletedAt: order.deletedAt || null,
+        deletedBy: order.deletedBy || null,
+        deleteReason: order.deleteReason || null,
+        billId: order.billId || null,
+        servedAt: order.servedAt || null,
+      };
+
       await supabase.from('orders').upsert({
         id: order.id,
         order_number: order.orderNumber,
@@ -836,7 +920,7 @@ export const dbService = {
         table_id: order.tableId || null,
         table_name: order.tableName || null,
         customer_name: order.customerName,
-        items: JSON.stringify(order.items),
+        items: JSON.stringify(orderMeta),
         subtotal: order.subtotal,
         status: order.status,
         is_billed: order.isBilled,

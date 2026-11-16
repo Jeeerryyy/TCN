@@ -130,7 +130,7 @@ export const AppContent: React.FC = () => {
 
   return (
     <MainLayout currentTab={currentTab} onSelectTab={setCurrentTab}>
-      <ErrorBoundary fallbackTitle={`Error in ${currentTab.toUpperCase()} Panel`}>
+      <ErrorBoundary key={currentTab} fallbackTitle={`Error in ${currentTab.toUpperCase()} Panel`}>
         {currentTab === 'dashboard' && (
           <Suspense fallback={<DashboardSkeleton />}>
             <DashboardOverview onNavigate={(tab) => setCurrentTab(tab)} />

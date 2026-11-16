@@ -8,19 +8,27 @@ import { formatINR, formatDateTime, getBillDateString, getLocalDateString } from
 import { Bill } from '../../types/billing.types';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { ManualNotebookEntryModal } from './ManualNotebookEntryModal';
-import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen, Phone, Pencil, User, Check, Coffee } from 'lucide-react';
+import { EditBillAmountModal } from './EditBillAmountModal';
+import { AdminDeleteConfirmModal } from '../../components/ui/AdminDeleteConfirmModal';
+import { Receipt, Eye, CreditCard, Banknote, QrCode, Wallet, Split, Trash2, RefreshCw, BookOpen, Phone, Pencil, User, Check, Coffee, FileEdit } from 'lucide-react';
 import { TransactionHistorySkeleton } from '../../components/ui/Skeleton';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 
 export const TransactionHistory: React.FC = () => {
-  const { bills, deleteBill, clearAllBills, refreshBills, updateBillDetails, isLoading } = useBilling();
-  const { isAdmin } = useAuth();
+  const { bills, editBillAmount, softDeleteBill, clearAllBills, refreshBills, updateBillDetails, isLoading } = useBilling();
+  const { isAdmin, currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [adminRevenueFilter, setAdminRevenueFilter] = useState<'per_day' | 'overall'>('per_day');
+
+  // Edit final bill amount state (Admin)
+  const [editingAmountBill, setEditingAmountBill] = useState<Bill | null>(null);
+
+  // Soft delete bill state (Admin)
+  const [deletingBill, setDeletingBill] = useState<Bill | null>(null);
 
   // Edit customer & phone state for any bill
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
@@ -57,6 +65,7 @@ export const TransactionHistory: React.FC = () => {
   };
 
   const filteredBills = bills.filter((b) => {
+    if (b.isDeleted) return false;
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -85,10 +94,10 @@ export const TransactionHistory: React.FC = () => {
   };
 
   const todayStr = getLocalDateString();
-  const todayBills = bills.filter((b) => getBillDateString(b) === todayStr && b.status !== 'voided');
+  const todayBills = bills.filter((b) => !b.isDeleted && getBillDateString(b) === todayStr && b.status !== 'voided');
   const todaySettledRevenue = todayBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
-  const overallBills = bills.filter((b) => b.status !== 'voided');
+  const overallBills = bills.filter((b) => !b.isDeleted && b.status !== 'voided');
   const totalSettledRevenue = overallBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
   return (
@@ -296,7 +305,12 @@ export const TransactionHistory: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-4 text-right font-mono font-bold text-sm text-[#15191E]">
-                      {formatINR(bill.finalTotal)}
+                      <div>{formatINR(bill.finalTotal)}</div>
+                      {bill.auditLog && bill.auditLog.length > 0 && (
+                        <span className="text-[9px] bg-[#EBF7EE] text-[#0D9926] border border-[#0D9926]/30 px-1 py-0.2 rounded font-mono font-semibold inline-block mt-0.5" title={`Adjusted: ${bill.auditLog[0]?.reason}`}>
+                          Edited (x{bill.auditLog.length})
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -310,6 +324,14 @@ export const TransactionHistory: React.FC = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={() => setEditingAmountBill(bill)}
+                          className="w-8 h-8 rounded-[6px] bg-[#FFF4ED] border border-[#FF5900]/30 hover:bg-[#FF5900] hover:text-white inline-flex items-center justify-center text-[#FF5900] transition-colors"
+                          title="Edit Final Bill Amount (Admin PIN required)"
+                        >
+                          <FileEdit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setPreviewBill(bill)}
                           className="w-8 h-8 rounded-[6px] bg-[#F3F3F7] border border-[#B9BBC6] hover:bg-[#FFFFFF] inline-flex items-center justify-center text-[#60646C] hover:text-[#15191E] transition-colors"
                           title="View & Re-print Tax Receipt"
@@ -318,13 +340,9 @@ export const TransactionHistory: React.FC = () => {
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm(`Permanently delete invoice ${bill.invoiceNumber} for ${bill.customerName}?`)) {
-                              deleteBill(bill.id);
-                            }
-                          }}
+                          onClick={() => setDeletingBill(bill)}
                           className="w-8 h-8 rounded-[6px] bg-[#FFF1F0] border border-[#FFCCC7] hover:bg-[#FF4D4F] hover:text-[#FFFFFF] inline-flex items-center justify-center text-[#CF1322] transition-colors"
-                          title="Delete this invoice"
+                          title="Delete this invoice (Admin PIN required)"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -344,6 +362,43 @@ export const TransactionHistory: React.FC = () => {
         isOpen={!!previewBill}
         onClose={() => setPreviewBill(null)}
       />
+
+      {/* Edit Bill Final Amount Modal (Admin) */}
+      {editingAmountBill && (
+        <EditBillAmountModal
+          bill={editingAmountBill}
+          isOpen={!!editingAmountBill}
+          onClose={() => setEditingAmountBill(null)}
+          onSave={async (newAmount, reason, pin) => {
+            return await editBillAmount(
+              editingAmountBill.id,
+              newAmount,
+              reason,
+              pin,
+              currentUser?.name || 'Administrator'
+            );
+          }}
+        />
+      )}
+
+      {/* Soft Delete Bill Modal (Admin) */}
+      {deletingBill && (
+        <AdminDeleteConfirmModal
+          isOpen={!!deletingBill}
+          onClose={() => setDeletingBill(null)}
+          title={`Delete Invoice #${deletingBill.invoiceNumber}`}
+          entityType="bill"
+          itemDetails={`Invoice #${deletingBill.invoiceNumber} · ${deletingBill.customerName} · ${formatINR(deletingBill.finalTotal)}`}
+          onConfirm={async (reason, pin) => {
+            return await softDeleteBill(
+              deletingBill.id,
+              reason,
+              pin,
+              currentUser?.name || 'Administrator'
+            );
+          }}
+        />
+      )}
 
       {/* Manual / Notebook Entry Modal */}
       <ManualNotebookEntryModal

@@ -8,7 +8,10 @@ import { formatINR, formatDateTime, formatTimeOnly } from '../../utils/formatter
 import { printThermalReceipt } from '../../utils/printReceipt';
 import { getReceiptConfig, onReceiptConfigChange } from '../../utils/receiptStorage';
 import { ReceiptConfig } from '../../types/receipt.types';
-import { Printer, CheckCircle, Copy } from 'lucide-react';
+import { Printer, CheckCircle, Copy, FileEdit } from 'lucide-react';
+import { useBilling } from '../../context/BillingContext';
+import { useAuth } from '../../context/AuthContext';
+import { EditBillAmountModal } from './EditBillAmountModal';
 
 interface InvoiceReceiptProps {
   bill: Bill | null;
@@ -22,6 +25,12 @@ export const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({
   onClose,
 }) => {
   const [config, setConfig] = useState<ReceiptConfig>(getReceiptConfig);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const { editBillAmount, bills } = useBilling();
+  const { currentUser } = useAuth();
+
+  // Keep live bill reference in case amount was updated
+  const liveBill = bill ? bills.find((b) => b.id === bill.id) || bill : null;
 
   useEffect(() => {
     setConfig(getReceiptConfig());
@@ -29,34 +38,36 @@ export const InvoiceReceipt: React.FC<InvoiceReceiptProps> = ({
     return unsubscribe;
   }, []);
 
-  if (!bill) return null;
+  if (!liveBill) return null;
+
+  const currentBill = liveBill;
 
   const handlePrint = () => {
-    printThermalReceipt(bill, config);
+    printThermalReceipt(currentBill, config);
   };
 
   const copyReceiptSummary = () => {
     const text = `${config.venueName}
-Invoice: ${bill.invoiceNumber}
-Date: ${formatDateTime(bill.settledAt || bill.createdAt)}
-Customer: ${bill.customerName}${bill.customerPhone ? ` (${bill.customerPhone})` : ''}
-Table: ${bill.tableName || 'N/A'}${
-      bill.sessionStartTime
-        ? `\nStart Time: ${formatTimeOnly(bill.sessionStartTime)}\nEnd Time: ${formatTimeOnly(bill.sessionEndTime || bill.settledAt)}`
+Invoice: ${currentBill.invoiceNumber}
+Date: ${formatDateTime(currentBill.settledAt || currentBill.createdAt)}
+Customer: ${currentBill.customerName}${currentBill.customerPhone ? ` (${currentBill.customerPhone})` : ''}
+Table: ${currentBill.tableName || 'N/A'}${
+      currentBill.sessionStartTime
+        ? `\nStart Time: ${formatTimeOnly(currentBill.sessionStartTime)}\nEnd Time: ${formatTimeOnly(currentBill.sessionEndTime || currentBill.settledAt)}`
         : ''
     }
-Total Paid: ${formatINR(bill.finalTotal)} via ${bill.paymentMethod.toUpperCase()}
+Total Paid: ${formatINR(currentBill.finalTotal)} via ${currentBill.paymentMethod.toUpperCase()}
 ${config.footerMessage1}`;
 
     navigator.clipboard.writeText(text);
     alert('Invoice details copied to clipboard!');
   };
 
-  const startTimeStr = bill.sessionStartTime ? formatTimeOnly(bill.sessionStartTime) : null;
-  const endTimeStr = bill.sessionEndTime
-    ? formatTimeOnly(bill.sessionEndTime)
-    : bill.settledAt
-    ? formatTimeOnly(bill.settledAt)
+  const startTimeStr = currentBill.sessionStartTime ? formatTimeOnly(currentBill.sessionStartTime) : null;
+  const endTimeStr = currentBill.sessionEndTime
+    ? formatTimeOnly(currentBill.sessionEndTime)
+    : currentBill.settledAt
+    ? formatTimeOnly(currentBill.settledAt)
     : null;
 
   return (
@@ -64,7 +75,7 @@ ${config.footerMessage1}`;
       isOpen={isOpen}
       onClose={onClose}
       title="Settlement Complete"
-      subtitle={`Invoice #${bill.invoiceNumber} finalized successfully`}
+      subtitle={`Invoice #${currentBill.invoiceNumber} finalized successfully`}
       maxWidth="md"
     >
       <div className="space-y-4">
@@ -103,28 +114,28 @@ ${config.footerMessage1}`;
           <div className="space-y-1 text-[11px] text-[#222222]">
             <div className="flex justify-between items-baseline">
               <span className="text-[#444444]">Invoice No:</span>
-              <span className="font-bold text-[#000000]">{bill.invoiceNumber}</span>
+              <span className="font-bold text-[#000000]">{currentBill.invoiceNumber}</span>
             </div>
             <div className="flex justify-between items-baseline">
               <span className="text-[#444444]">Date & Time:</span>
-              <span className="text-[#111111]">{formatDateTime(bill.settledAt || bill.createdAt)}</span>
+              <span className="text-[#111111]">{formatDateTime(currentBill.settledAt || currentBill.createdAt)}</span>
             </div>
-            {config.showCustomerName && bill.customerName && (
+            {config.showCustomerName && currentBill.customerName && (
               <div className="flex justify-between items-baseline">
                 <span className="text-[#444444]">Customer:</span>
-                <span className="font-bold text-[#000000]">{bill.customerName}</span>
+                <span className="font-bold text-[#000000]">{currentBill.customerName}</span>
               </div>
             )}
-            {bill.customerPhone && (
+            {currentBill.customerPhone && (
               <div className="flex justify-between items-baseline">
                 <span className="text-[#444444]">Phone:</span>
-                <span className="font-bold text-[#000000]">{bill.customerPhone}</span>
+                <span className="font-bold text-[#000000]">{currentBill.customerPhone}</span>
               </div>
             )}
-            {bill.tableName && (
+            {currentBill.tableName && (
               <div className="flex justify-between items-baseline">
                 <span className="text-[#444444]">Table:</span>
-                <span className="text-[#111111]">{bill.tableName}</span>
+                <span className="text-[#111111]">{currentBill.tableName}</span>
               </div>
             )}
             {config.showStartEndTime && startTimeStr && (
@@ -143,7 +154,7 @@ ${config.footerMessage1}`;
               <div className="flex justify-between items-baseline">
                 <span className="text-[#444444]">Cashier:</span>
                 <span className="text-[#111111]">
-                  {bill.settledByStaff || config.defaultCashierName || 'Duty Cashier'}
+                  {currentBill.settledByStaff || config.defaultCashierName || 'Duty Cashier'}
                 </span>
               </div>
             )}
@@ -159,7 +170,7 @@ ${config.footerMessage1}`;
               <span>Amt (₹)</span>
             </div>
 
-            {bill.items.map((item, idx) => (
+            {currentBill.items.map((item, idx) => (
               <div key={idx} className="text-[11px] text-[#15191E] space-y-0.5">
                 <div className="flex justify-between items-baseline">
                   <span className="pr-2 font-medium">
@@ -184,25 +195,25 @@ ${config.footerMessage1}`;
           <div className="space-y-1.5 text-[11px] text-[#222222]">
             <div className="flex justify-between">
               <span className="text-[#444444]">Subtotal:</span>
-              <span className="font-medium">₹ {bill.subtotal}</span>
+              <span className="font-medium">₹ {currentBill.subtotal}</span>
             </div>
 
-            {bill.discountAmount > 0 && (
+            {currentBill.discountAmount > 0 && (
               <div className="flex justify-between text-[#0D9926] font-semibold">
-                <span>Discount ({bill.discountReason || 'Promo'}):</span>
-                <span>- ₹ {bill.discountAmount}</span>
+                <span>Discount ({currentBill.discountReason || 'Promo'}):</span>
+                <span>- ₹ {currentBill.discountAmount}</span>
               </div>
             )}
 
             <div className="flex justify-between text-sm font-extrabold text-[#000000] pt-1.5 font-sans items-baseline">
               <span>TOTAL PAID:</span>
-              <span className="font-mono font-bold text-[#FF5900] text-base">₹{bill.finalTotal}</span>
+              <span className="font-mono font-bold text-[#FF5900] text-base">₹{currentBill.finalTotal}</span>
             </div>
 
             {config.showPaymentMode && (
               <div className="flex justify-between text-[10px] text-[#555555] pt-0.5">
                 <span>Payment Mode:</span>
-                <span className="uppercase font-semibold text-[#111111]">{bill.paymentMethod}</span>
+                <span className="uppercase font-semibold text-[#111111]">{currentBill.paymentMethod}</span>
               </div>
             )}
           </div>
@@ -221,15 +232,26 @@ ${config.footerMessage1}`;
 
         {/* Modal Action Buttons (Hidden when printing) */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[#B9BBC6] print:hidden">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyReceiptSummary}
-            className="w-full sm:w-auto flex items-center justify-center gap-1.5"
-          >
-            <Copy className="w-4 h-4 text-[#60646C]" />
-            <span>Copy Summary</span>
-          </Button>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyReceiptSummary}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5"
+            >
+              <Copy className="w-4 h-4 text-[#60646C]" />
+              <span>Copy</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsEditModalOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 border-[#FF5900]/40 text-[#FF5900] hover:bg-[#FFF4ED]"
+            >
+              <FileEdit className="w-3.5 h-3.5" />
+              <span>Edit Amount</span>
+            </Button>
+          </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
@@ -252,6 +274,24 @@ ${config.footerMessage1}`;
           </div>
         </div>
       </div>
+
+      {/* Edit Bill Amount Modal */}
+      {isEditModalOpen && (
+        <EditBillAmountModal
+          bill={currentBill}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={async (newAmount, reason, pin) => {
+            return await editBillAmount(
+              currentBill.id,
+              newAmount,
+              reason,
+              pin,
+              currentUser?.name || 'Administrator'
+            );
+          }}
+        />
+      )}
     </Modal>
   );
 };

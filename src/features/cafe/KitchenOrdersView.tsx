@@ -1,24 +1,30 @@
 import React, { useState } from 'react';
 import { useCafe } from '../../context/CafeContext';
 import { useBilling } from '../../context/BillingContext';
+import { useAuth } from '../../context/AuthContext';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { formatDateTime, formatINR } from '../../utils/formatters';
-import { ChefHat, CheckCircle2, Clock, Flame, BellRing, Receipt } from 'lucide-react';
+import { ChefHat, CheckCircle2, Clock, Flame, BellRing, Receipt, Trash2 } from 'lucide-react';
 import { CafeOrder, KitchenStatus } from '../../types/cafe.types';
 import { KitchenOrdersSkeleton } from '../../components/ui/Skeleton';
 import { SettleCafeBillModal } from './SettleCafeBillModal';
 import { InvoiceReceipt } from '../billing/InvoiceReceipt';
+import { AdminDeleteConfirmModal } from '../../components/ui/AdminDeleteConfirmModal';
 
 export const KitchenOrdersView: React.FC = () => {
-  const { orders, updateOrderStatus, isLoading } = useCafe();
+  const { orders, updateOrderStatus, softDeleteOrder, isLoading } = useCafe();
   const { activeBillModal, setActiveBillModal } = useBilling();
+  const { currentUser } = useAuth();
   const [mobileStage, setMobileStage] = useState<KitchenStatus | 'all'>('all');
   const [orderToSettle, setOrderToSettle] = useState<CafeOrder | null>(null);
+  const [deletingOrder, setDeletingOrder] = useState<CafeOrder | null>(null);
 
   if (isLoading && orders.length === 0) {
     return <KitchenOrdersSkeleton />;
   }
+
+  const activeOrders = orders.filter((o) => !o.isDeleted);
 
   const columns: { id: KitchenStatus; title: string; icon: React.ReactNode; color: string }[] = [
     {
@@ -70,10 +76,10 @@ export const KitchenOrdersView: React.FC = () => {
               : 'bg-[#FFFFFF] text-[#15191E] border border-[#B9BBC6]'
           }`}
         >
-          All Tickets ({orders.length})
+          All Tickets ({activeOrders.length})
         </button>
         {columns.map((col) => {
-          const count = orders.filter((o) => o.status === col.id).length;
+          const count = activeOrders.filter((o) => o.status === col.id).length;
           return (
             <button
               key={col.id}
@@ -94,7 +100,7 @@ export const KitchenOrdersView: React.FC = () => {
       {/* Kanban Board Columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 items-start">
         {columns.map((col) => {
-          const colOrders = orders.filter((o) => o.status === col.id);
+          const colOrders = activeOrders.filter((o) => o.status === col.id);
           const isVisibleOnMobile = mobileStage === 'all' || mobileStage === col.id;
 
           return (
@@ -128,7 +134,7 @@ export const KitchenOrdersView: React.FC = () => {
                       className="bg-[#FCFCFD] border border-[#B9BBC6] rounded-[6px] p-4 space-y-3"
                     >
                       {/* Ticket Meta */}
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="text-xs font-bold text-[#000000] font-mono flex items-center gap-2">
                             <span>{order.orderNumber}</span>
@@ -147,9 +153,19 @@ export const KitchenOrdersView: React.FC = () => {
                           </div>
                         </div>
 
-                        <span className="text-[10px] text-[#8B8D98] font-mono">
-                          {formatDateTime(order.createdAt).split(',')[1]}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-[#8B8D98] font-mono">
+                            {formatDateTime(order.createdAt).split(',')[1]}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setDeletingOrder(order)}
+                            className="w-6 h-6 rounded hover:bg-[#FFF1F0] text-[#8B8D98] hover:text-[#CF1322] flex items-center justify-center transition-colors"
+                            title="Delete order ticket (Admin PIN required)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {/* Items List */}
@@ -256,6 +272,25 @@ export const KitchenOrdersView: React.FC = () => {
         isOpen={!!activeBillModal}
         onClose={() => setActiveBillModal(null)}
       />
+
+      {/* Soft Delete Order Confirm Modal */}
+      {deletingOrder && (
+        <AdminDeleteConfirmModal
+          isOpen={!!deletingOrder}
+          onClose={() => setDeletingOrder(null)}
+          title={`Delete Order ${deletingOrder.orderNumber}`}
+          entityType="order"
+          itemDetails={`Order ${deletingOrder.orderNumber} · ${deletingOrder.customerName || 'Guest'} · ${formatINR(deletingOrder.subtotal)}`}
+          onConfirm={async (reason, pin) => {
+            return await softDeleteOrder(
+              deletingOrder.id,
+              reason,
+              pin,
+              currentUser?.name || 'Administrator'
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

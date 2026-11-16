@@ -1,6 +1,6 @@
 /* Brex Design System – Fintech Modern, High-Contrast, Inter Typography */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Table } from '../../types/table.types';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -8,7 +8,10 @@ import { useTables } from '../../context/TableContext';
 import { useCafe } from '../../context/CafeContext';
 import { calculateElapsedSeconds, calculateSessionCharge } from '../../utils/timer';
 import { formatDurationHMS, formatINR, formatTimeOnly } from '../../utils/formatters';
-import { Play, Pause, ArrowRightLeft, Utensils, User, AlertCircle, Phone, FileCheck } from 'lucide-react';
+import { Play, Pause, ArrowRightLeft, Utensils, User, AlertCircle, Phone, FileCheck, Trash2 } from 'lucide-react';
+import { TableCafeItemsModal } from './TableCafeItemsModal';
+import { AdminDeleteConfirmModal } from '../../components/ui/AdminDeleteConfirmModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface TableCardProps {
   table: Table;
@@ -22,11 +25,13 @@ export const TableCard: React.FC<TableCardProps> = ({
   table,
   onStartSession,
   onTransfer,
-  onAddCafeOrder,
+  onAddCafeOrder: _onAddCafeOrder,
   onSettleBill,
 }) => {
-  const { activeSessionsMap, pauseSession, resumeSession, tickCounter, sessions, bookings } = useTables();
+  const { activeSessionsMap, pauseSession, resumeSession, tickCounter, sessions, bookings, softDeleteSession } = useTables();
   const { orders } = useCafe();
+  const { currentUser } = useAuth();
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
 
   // Find active session for this table
   let session = activeSessionsMap[table.id];
@@ -83,11 +88,17 @@ export const TableCard: React.FC<TableCardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, tickCounter, table.minMinutes, table.ratePerHour, session?.ratePerMinute]);
 
+  const [isCafeModalOpen, setIsCafeModalOpen] = useState(false);
+
   // Total linked cafe items for this table (only active, unbilled orders explicitly attached)
   const linkedCafeOrders = orders.filter(
-    (o) => !o.isBilled && o.status !== 'cancelled' && Boolean(session?.linkedCafeOrderIds?.includes(o.id))
+    (o) => !o.isBilled && !o.isDeleted && o.status !== 'cancelled' && Boolean(session?.linkedCafeOrderIds?.includes(o.id))
   );
   const cafeTotal = linkedCafeOrders.reduce((sum, o) => sum + o.subtotal, 0);
+  const totalCafeItemsCount = linkedCafeOrders.reduce(
+    (sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0),
+    0
+  );
 
   const isSnooker = table.type === 'snooker';
 
@@ -125,8 +136,8 @@ export const TableCard: React.FC<TableCardProps> = ({
           </div>
         </div>
 
-        {/* Brex Status Chip */}
-        <div>
+        {/* Brex Status Chip & Admin Action */}
+        <div className="flex items-center gap-1.5">
           {table.status === 'available' && (
             <Badge variant="emerald" dot size="sm">Available</Badge>
           )}
@@ -138,6 +149,16 @@ export const TableCard: React.FC<TableCardProps> = ({
           )}
           {table.status === 'maintenance' && (
             <Badge variant="slate" size="sm">Maintenance</Badge>
+          )}
+          {session && (
+            <button
+              type="button"
+              onClick={() => setIsDeletingSession(true)}
+              className="w-6 h-6 rounded hover:bg-[#FFF1F0] text-[#8B8D98] hover:text-[#CF1322] flex items-center justify-center transition-colors ml-0.5"
+              title="Delete / Void this session (Admin PIN required)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -338,13 +359,14 @@ export const TableCard: React.FC<TableCardProps> = ({
                 )}
 
                 <Button
-                  variant="secondary"
+                  variant={totalCafeItemsCount > 0 ? "secondary" : "secondary"}
                   size="sm"
-                  onClick={() => onAddCafeOrder(table)}
-                  icon={<Utensils className="w-3.5 h-3.5 text-[#15191E]" />}
-                  title="Add drinks or food to table tab"
+                  onClick={() => setIsCafeModalOpen(true)}
+                  icon={<Utensils className={`w-3.5 h-3.5 ${totalCafeItemsCount > 0 ? 'text-[#FF5900]' : 'text-[#15191E]'}`} />}
+                  title="View, add, or edit café items attached to this table"
+                  className={totalCafeItemsCount > 0 ? "border-[#FF5900]/40 bg-[#FFF4ED] text-[#FF5900] font-semibold" : ""}
                 >
-                  Café
+                  Café Items{totalCafeItemsCount > 0 ? ` (${totalCafeItemsCount})` : ''}
                 </Button>
 
                 <Button
@@ -397,6 +419,33 @@ export const TableCard: React.FC<TableCardProps> = ({
           )}
         </div>
       </div>
+
+      {/* Interactive Café Items Sheet/Modal */}
+      <TableCafeItemsModal
+        table={table}
+        session={session}
+        isOpen={isCafeModalOpen}
+        onClose={() => setIsCafeModalOpen(false)}
+      />
+
+      {/* Session Soft Delete Confirmation Modal */}
+      {isDeletingSession && session && (
+        <AdminDeleteConfirmModal
+          isOpen={isDeletingSession}
+          onClose={() => setIsDeletingSession(false)}
+          title={`Delete Active Session - ${table.name}`}
+          entityType="session"
+          itemDetails={`${table.name} (${table.type.toUpperCase()}) · Guest: ${session.primaryCustomerName} · Started: ${formatTimeOnly(session.startTime)}`}
+          onConfirm={async (reason, pin) => {
+            return await softDeleteSession(
+              session.id,
+              reason,
+              pin,
+              currentUser?.name || 'Administrator'
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -23,15 +23,15 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
   const { setSelectedTableId, setCartDestination } = useCafe();
   const { activeBillModal, setActiveBillModal } = useBilling();
 
-  if (isLoading && tables.length === 0) {
-    return <FloorPlanSkeleton />;
-  }
-
   const [activeFilter, setActiveFilter] = useState<'all' | 'pool' | 'snooker'>('all');
   const [sessionModalTable, setSessionModalTable] = useState<Table | null>(null);
   const [transferModalTable, setTransferModalTable] = useState<Table | null>(null);
   const [settleModalTable, setSettleModalTable] = useState<Table | null>(null);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+
+  if (isLoading && tables.length === 0) {
+    return <FloorPlanSkeleton />;
+  }
 
   // Filtered list
   const filteredTables = tables.filter((t) => {
@@ -109,11 +109,10 @@ export const TableFloorPlan: React.FC<TableFloorPlanProps> = ({ onNavigateToCafe
             <button
               key={tab.id}
               onClick={() => setActiveFilter(tab.id as typeof activeFilter)}
-              className={`px-3 sm:px-3.5 py-1.5 rounded-[6px] text-xs whitespace-nowrap transition-colors duration-150 ${
-                activeFilter === tab.id
+              className={`px-3 sm:px-3.5 py-1.5 rounded-[6px] text-xs whitespace-nowrap transition-colors duration-150 ${activeFilter === tab.id
                   ? 'bg-[#FF5900] text-[#FFFFFF] font-medium'
                   : 'text-[#60646C] hover:text-[#15191E] hover:bg-[#15191E]/[0.06] font-normal'
-              }`}
+                }`}
             >
               {tab.label}
             </button>

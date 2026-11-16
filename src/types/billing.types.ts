@@ -21,6 +21,16 @@ export interface BillLineItem {
   totalPrice: number;
 }
 
+export interface BillAuditEntry {
+  id: string;
+  action: 'edit_amount' | 'soft_delete' | 'discount_change';
+  originalAmount: number;
+  newAmount: number;
+  changedBy: string;
+  timestamp: string;
+  reason: string;
+}
+
 export interface Bill {
   id: string;
   invoiceNumber: string;    // e.g., 'TCN-2026-0842'
@@ -60,5 +70,14 @@ export interface Bill {
   // Manual / Notebook backdated entry
   isManualEntry?: boolean;
   notes?: string;
+
+  // Audit trail for edits & adjustments
+  auditLog?: BillAuditEntry[];
+
+  // Soft delete support
+  isDeleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
+  deleteReason?: string;
 }
 

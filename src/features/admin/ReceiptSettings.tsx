@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const ReceiptSettings: React.FC = () => {
-  const [config, setConfig] = useState<ReceiptConfig>(getReceiptConfig);
+  const [config, setConfig] = useState<ReceiptConfig>(() => getReceiptConfig());
   const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
@@ -489,3 +489,5 @@ export const ReceiptSettings: React.FC = () => {
     </div>
   );
 };
+
+export default ReceiptSettings;

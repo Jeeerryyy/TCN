@@ -30,7 +30,23 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ errorInfo });
   }
 
+  public componentDidUpdate(prevProps: Props) {
+    if (prevProps.fallbackTitle !== this.props.fallbackTitle) {
+      if (this.state.hasError) {
+        this.setState({ hasError: false, error: null, errorInfo: null });
+      }
+    }
+  }
+
   private handleReload = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => r.unregister());
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+    }
     window.location.reload();
   };
 
@@ -78,10 +94,20 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {this.state.error && (
-              <div className="bg-[#F3F3F7] p-3 rounded-[6px] text-left border border-[#B9BBC6]/40 max-h-32 overflow-y-auto">
-                <p className="text-[12px] font-mono text-[#DE350B] break-words">
+              <div className="bg-[#F3F3F7] p-3 rounded-[6px] text-left border border-[#B9BBC6]/40 max-h-48 overflow-y-auto space-y-1">
+                <p className="text-[12px] font-mono text-[#DE350B] break-words font-semibold">
                   {this.state.error.name}: {this.state.error.message}
                 </p>
+                {this.state.error.stack && (
+                  <pre className="text-[10px] font-mono text-[#60646C] whitespace-pre-wrap max-h-24 overflow-y-auto">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+                {this.state.errorInfo?.componentStack && (
+                  <pre className="text-[10px] font-mono text-[#006EF5] whitespace-pre-wrap max-h-24 overflow-y-auto">
+                    {this.state.errorInfo.componentStack}
+                  </pre>
+                )}
               </div>
             )}
 
