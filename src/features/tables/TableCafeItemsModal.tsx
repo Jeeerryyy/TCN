@@ -13,6 +13,7 @@ import {
   Clock,
   Coffee,
   PlusCircle,
+  Search,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../context/ToastContext';
@@ -33,11 +34,10 @@ export const TableCafeItemsModal: React.FC<TableCafeItemsModalProps> = ({
   const { menu, orders, addItemToTableOrder, updateTableOrderItemQty, removeTableOrderItem } = useCafe();
   const { success, warning } = useToast();
 
-  const [selectedMenuItemId, setSelectedMenuItemId] = useState<string>('');
-  const [addQty, setAddQty] = useState<number>(1);
-  const [showCustomForm, setShowCustomForm] = useState<boolean>(false);
   const [customName, setCustomName] = useState('');
   const [customPrice, setCustomPrice] = useState<number | ''>('');
+  const [menuSearch, setMenuSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'beverages' | 'snacks'>('all');
 
   // Collect all unbilled active orders explicitly linked to this session/table
   const linkedOrders = useMemo(() => {
@@ -89,29 +89,10 @@ export const TableCafeItemsModal: React.FC<TableCafeItemsModalProps> = ({
 
   const isSnooker = table.type === 'snooker';
 
-  const handleAddFromMenu = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!selectedMenuItemId) return;
-
-    const menuItem = menu.find((m) => m.id === selectedMenuItemId);
-    if (!menuItem) return;
-
-    addItemToTableOrder(table.id, {
-      menuItemId: menuItem.id,
-      name: menuItem.name,
-      price: menuItem.price,
-      quantity: addQty || 1,
-    });
-
-    success(`Added ${addQty || 1}x ${menuItem.name} to ${table.name}`, 'Café Tab Updated');
-    setSelectedMenuItemId('');
-    setAddQty(1);
-  };
-
   const handleAddCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!customName.trim()) {
-      warning('Please enter an item name (e.g. Energy Drink, Soda).', 'Name Required');
+      warning('Please enter an item name (e.g. Soda, Cigarette).', 'Name Required');
       return;
     }
     const priceNum = Number(customPrice);
@@ -123,14 +104,12 @@ export const TableCafeItemsModal: React.FC<TableCafeItemsModalProps> = ({
     addItemToTableOrder(table.id, {
       name: customName.trim(),
       price: priceNum,
-      quantity: addQty || 1,
+      quantity: 1,
     });
 
     success(`Added custom item "${customName.trim()}" to ${table.name}`, 'Item Attached');
     setCustomName('');
     setCustomPrice('');
-    setAddQty(1);
-    setShowCustomForm(false);
   };
 
   const availableMenuItems = menu.filter((m) => m.isAvailable);
@@ -284,129 +263,153 @@ export const TableCafeItemsModal: React.FC<TableCafeItemsModalProps> = ({
             )}
           </div>
 
-          {/* Quick Add Item Section */}
+          {/* Fast 1-Tap Add Section */}
           <div className="bg-[#F8F9FA] border border-[#B9BBC6] rounded-[8px] p-3.5 sm:p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-xs uppercase font-bold tracking-wider text-[#15191E] flex items-center gap-1.5">
-                <PlusCircle className="w-3.5 h-3.5 text-[#006EF5]" /> Add More Items
+                <PlusCircle className="w-3.5 h-3.5 text-[#006EF5]" /> 1-Tap Add to Table
               </span>
-              <button
-                type="button"
-                onClick={() => setShowCustomForm(!showCustomForm)}
-                className="text-[11px] font-semibold text-[#006EF5] hover:underline"
-              >
-                {showCustomForm ? '← Choose from Menu' : '+ Custom Open Item'}
-              </button>
-            </div>
 
-            {!showCustomForm ? (
-              /* Menu Picker */
-              <div className="space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                  <div className="sm:col-span-3">
-                    <select
-                      value={selectedMenuItemId}
-                      onChange={(e) => setSelectedMenuItemId(e.target.value)}
-                      className="w-full h-[38px] px-3 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] focus:outline-none focus:border-[#FF5900]"
-                    >
-                      <option value="">Select item from café menu...</option>
-                      {availableMenuItems.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} – {formatINR(m.price)} ({m.category})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center border border-[#B9BBC6] rounded-[6px] bg-[#FFFFFF] overflow-hidden h-[38px] w-24">
-                      <button
-                        type="button"
-                        onClick={() => setAddQty(Math.max(1, addQty - 1))}
-                        className="w-7 h-full flex items-center justify-center hover:bg-[#F3F3F7]"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <input
-                        type="number"
-                        min="1"
-                        value={addQty}
-                        onChange={(e) => setAddQty(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-10 text-center font-mono text-xs font-semibold focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setAddQty(addQty + 1)}
-                        className="w-7 h-full flex items-center justify-center hover:bg-[#F3F3F7]"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      className="flex-1 h-[38px]"
-                      onClick={handleAddFromMenu}
-                      disabled={!selectedMenuItemId}
-                    >
-                      Add
-                    </Button>
-                  </div>
+              {/* Category Filter Pills & Search */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex bg-[#FFFFFF] border border-[#B9BBC6] p-0.5 rounded-[6px]">
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('all')}
+                    className={`px-2 py-1 text-[11px] rounded-[4px] font-medium transition-colors ${
+                      categoryFilter === 'all'
+                        ? 'bg-[#FF5900] text-white shadow-sm'
+                        : 'text-[#60646C] hover:text-[#15191E]'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('beverages')}
+                    className={`px-2 py-1 text-[11px] rounded-[4px] font-medium transition-colors ${
+                      categoryFilter === 'beverages'
+                        ? 'bg-[#FF5900] text-white shadow-sm'
+                        : 'text-[#60646C] hover:text-[#15191E]'
+                    }`}
+                  >
+                    Beverages
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('snacks')}
+                    className={`px-2 py-1 text-[11px] rounded-[4px] font-medium transition-colors ${
+                      categoryFilter === 'snacks'
+                        ? 'bg-[#FF5900] text-white shadow-sm'
+                        : 'text-[#60646C] hover:text-[#15191E]'
+                    }`}
+                  >
+                    Snacks
+                  </button>
                 </div>
-              </div>
-            ) : (
-              /* Custom Item Form */
-              <form onSubmit={handleAddCustom} className="space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-[#8B8D98]" />
                   <input
                     type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="Item name (e.g. Soda, Cigarette)"
-                    className="h-[38px] px-3 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] focus:outline-none focus:border-[#FF5900] sm:col-span-1"
+                    value={menuSearch}
+                    onChange={(e) => setMenuSearch(e.target.value)}
+                    placeholder="Search menu..."
+                    className="w-32 sm:w-36 h-[28px] pl-7 pr-2 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-[11px] text-[#15191E] focus:outline-none focus:border-[#FF5900]"
                   />
-                  <div className="relative sm:col-span-1">
-                    <span className="absolute left-3 top-2.5 text-xs text-[#8B8D98]">₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={customPrice}
-                      onChange={(e) => setCustomPrice(e.target.value === '' ? '' : Number(e.target.value))}
-                      placeholder="Price"
-                      className="w-full h-[38px] pl-6 pr-3 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs font-mono text-[#15191E] focus:outline-none focus:border-[#FF5900]"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 sm:col-span-1">
-                    <div className="flex items-center border border-[#B9BBC6] rounded-[6px] bg-[#FFFFFF] overflow-hidden h-[38px] w-20 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setAddQty(Math.max(1, addQty - 1))}
-                        className="w-6 h-full flex items-center justify-center hover:bg-[#F3F3F7]"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-center font-mono text-xs font-semibold">
-                        {addQty}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setAddQty(addQty + 1)}
-                        className="w-6 h-full flex items-center justify-center hover:bg-[#F3F3F7]"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <Button type="submit" variant="primary" size="sm" className="flex-1 h-[38px]">
-                      Add Custom
-                    </Button>
-                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* 1-Tap Item Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[190px] overflow-y-auto pr-0.5">
+              {availableMenuItems
+                .filter((item) => {
+                  const matchCat = categoryFilter === 'all' || item.category === categoryFilter;
+                  const matchSearch =
+                    !menuSearch.trim() || item.name.toLowerCase().includes(menuSearch.toLowerCase().trim());
+                  return matchCat && matchSearch;
+                })
+                .map((item) => {
+                  const countInTab = flattenedItems
+                    .filter((i) => i.name.toLowerCase() === item.name.toLowerCase())
+                    .reduce((sum, i) => sum + i.quantity, 0);
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        addItemToTableOrder(table.id, {
+                          menuItemId: item.id,
+                          name: item.name,
+                          price: item.price,
+                          quantity: 1,
+                        });
+                        success(`Added +1 ${item.name} (${formatINR(item.price)})`, 'Item Added');
+                      }}
+                      className={`p-2.5 rounded-[6px] border text-left flex flex-col justify-between transition-all duration-150 active:scale-[0.97] cursor-pointer ${
+                        countInTab > 0
+                          ? 'bg-[#FFF8F0] border-[#FF5900] shadow-[0px_1px_3px_rgba(255,89,0,0.12)]'
+                          : 'bg-[#FFFFFF] border-[#B9BBC6] hover:border-[#FF5900] hover:bg-[#F8F9FA]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="font-semibold text-xs text-[#15191E] leading-tight line-clamp-1">
+                          {item.name}
+                        </span>
+                        {countInTab > 0 && (
+                          <span className="bg-[#FF5900] text-white text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                            ×{countInTab}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1 text-[11px]">
+                        <span className="font-mono font-bold text-[#FF5900]">
+                          {formatINR(item.price)}
+                        </span>
+                        <span className="text-[10px] text-[#006EF5] font-semibold flex items-center gap-0.5">
+                          <Plus className="w-3 h-3" /> Tap to Add
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* Quick 1-Line Custom Item Row */}
+            <div className="pt-2 border-t border-[#B9BBC6]/50">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-semibold text-[#60646C]">Or Add Off-Menu Item:</span>
+                <span className="text-[10px] text-[#8B8D98]">e.g. Soda, Cigarette, Biscuit</span>
+              </div>
+              <form onSubmit={handleAddCustom} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="Item Name"
+                  className="flex-1 h-[34px] px-3 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#FF5900]"
+                />
+                <div className="relative w-24 shrink-0">
+                  <span className="absolute left-2.5 top-2 text-xs text-[#8B8D98] font-mono">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={customPrice}
+                    onChange={(e) => setCustomPrice(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Price"
+                    className="w-full h-[34px] pl-6 pr-2 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs font-mono font-bold text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#FF5900]"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="h-[34px] px-3.5 bg-[#FF5900] hover:bg-[#E64E00] text-white rounded-[6px] text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shadow-sm shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add
+                </button>
               </form>
-            )}
+            </div>
           </div>
         </div>
 

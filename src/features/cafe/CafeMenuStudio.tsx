@@ -47,6 +47,37 @@ export const CafeMenuStudio: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
+  // Quick Add State (Fastest 1-line item creation)
+  const [quickName, setQuickName] = useState('');
+  const [quickPrice, setQuickPrice] = useState('');
+  const [quickCategory, setQuickCategory] = useState<CafeCategory>('beverages');
+
+  const handleQuickAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickName.trim()) {
+      showNotification('Please enter an item name');
+      return;
+    }
+    const price = parseFloat(quickPrice);
+    if (isNaN(price) || price < 0) {
+      showNotification('Please enter a valid price in ₹');
+      return;
+    }
+
+    addMenuItem({
+      name: quickName.trim(),
+      category: quickCategory,
+      price,
+      isVegetarian: true,
+      isAvailable: true,
+      prepTimeMinutes: 1,
+    });
+
+    showNotification(`Added "${quickName.trim()}" (₹${price}) to menu!`);
+    setQuickName('');
+    setQuickPrice('');
+  };
+
   // Statistics
   const totalItems = menu.length;
   const beveragesCount = menu.filter((m) => m.category === 'beverages').length;
@@ -231,6 +262,56 @@ export const CafeMenuStudio: React.FC = () => {
           <div className="text-2xl font-mono font-bold text-[#FF5900] mt-1">{formatINR(avgPrice)}</div>
         </div>
       </div>
+
+      {/* 1-Line Quick Add Bar: Simplest Way to Add Any Beverage / Snack */}
+      <form
+        onSubmit={handleQuickAdd}
+        className="bg-[#FFFFFF] border-2 border-[#FF5900]/30 rounded-[10px] p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+      >
+        <div className="flex items-center gap-1.5 text-xs font-bold text-[#FF5900] whitespace-nowrap shrink-0">
+          <Sparkles className="w-4 h-4 text-[#FF5900]" />
+          <span>Quick Add:</span>
+        </div>
+
+        <input
+          type="text"
+          value={quickName}
+          onChange={(e) => setQuickName(e.target.value)}
+          placeholder="Item Name (e.g. Sprite, Thums Up, Lays Chips)..."
+          className="flex-1 h-[40px] px-3.5 bg-[#F8F9FA] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] placeholder-[#8B8D98] focus:bg-[#FFFFFF] focus:outline-none focus:border-[#FF5900] transition-colors"
+        />
+
+        <div className="relative w-full sm:w-28 shrink-0">
+          <span className="absolute left-3 top-2.5 text-xs font-mono font-bold text-[#8B8D98]">₹</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={quickPrice}
+            onChange={(e) => setQuickPrice(e.target.value)}
+            placeholder="Price"
+            className="w-full h-[40px] pl-7 pr-3 bg-[#F8F9FA] border border-[#B9BBC6] rounded-[6px] text-xs font-mono font-bold text-[#15191E] placeholder-[#8B8D98] focus:bg-[#FFFFFF] focus:outline-none focus:border-[#FF5900] transition-colors"
+          />
+        </div>
+
+        <select
+          value={quickCategory}
+          onChange={(e) => setQuickCategory(e.target.value as CafeCategory)}
+          className="h-[40px] px-3 bg-[#F8F9FA] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] focus:bg-[#FFFFFF] focus:outline-none focus:border-[#FF5900] transition-colors shrink-0"
+        >
+          <option value="beverages">Beverages (Cold Drinks)</option>
+          <option value="snacks">Snacks & Munchies</option>
+          <option value="quick_bites">Quick Bites</option>
+          <option value="coffee">Tea & Coffee</option>
+        </select>
+
+        <button
+          type="submit"
+          className="h-[40px] px-5 rounded-[6px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shrink-0 shadow-sm"
+        >
+          <Plus className="w-4 h-4" /> Add Item
+        </button>
+      </form>
 
       {/* Search & Category Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

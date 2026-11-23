@@ -7,8 +7,10 @@ import { Button } from '../../components/ui/Button';
 import { useTables } from '../../context/TableContext';
 import { useCustomers } from '../../context/CustomerContext';
 import { formatINR } from '../../utils/formatters';
-import { User, Users, Play, Phone, Search, Star } from 'lucide-react';
+import { Users, Play } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
+import { CustomerAutoSuggestInput } from '../../components/ui/CustomerAutoSuggestInput';
+import { KnownCustomerSummary } from '../../hooks/useCustomerLookup';
 
 interface StartSessionDialogProps {
   table: Table | null;
@@ -22,33 +24,16 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
   onClose,
 }) => {
   const { startSession } = useTables();
-  const { customers } = useCustomers();
+  const { customers, addCustomer, updateCustomer } = useCustomers();
   const { warning, success } = useToast();
 
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [selectedCustomer, setSelectedCustomer] = useState<KnownCustomerSummary | null>(null);
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
   const [playersCount, setPlayersCount] = useState(2);
   const [notes, setNotes] = useState('');
 
   if (!table) return null;
-
-  // Filter matching registered members
-  const matchedCustomers = customerSearch.trim()
-    ? customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-          c.phone.includes(customerSearch)
-      ).slice(0, 3)
-    : [];
-
-  const handleSelectCustomer = (c: typeof customers[0]) => {
-    setSelectedCustomerId(c.id);
-    setGuestName(c.name);
-    setGuestPhone(c.phone);
-    setCustomerSearch('');
-  };
 
   const handleStart = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,13 +42,46 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
       return;
     }
 
+    const cleanName = guestName.trim();
+    const cleanPhone = guestPhone.trim();
+    let finalCustomerId = selectedCustomer?.id;
+
+    // If customer is already in CRM, update their last visit; if not, automatically save them to CRM
+    const existingCrm = customers.find(
+      (c) =>
+        c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '') ||
+        c.name.toLowerCase().trim() === cleanName.toLowerCase()
+    );
+
+    if (existingCrm) {
+      finalCustomerId = existingCrm.id;
+      updateCustomer(existingCrm.id, {
+        lastVisit: new Date().toISOString(),
+        notes: notes.trim()
+          ? existingCrm.notes
+            ? `${existingCrm.notes}; ${notes.trim()}`
+            : notes.trim()
+          : existingCrm.notes,
+      });
+    } else if (cleanPhone) {
+      // Auto-register customer so their details are permanently available for auto-fetch
+      const newCust = addCustomer({
+        name: cleanName,
+        phone: cleanPhone,
+        tier: 'standard',
+        preferredGame: table.type,
+        notes: notes.trim() || undefined,
+      });
+      finalCustomerId = newCust.id;
+    }
+
     startSession({
       tableId: table.id,
-      primaryCustomerName: guestName.trim(),
-      primaryCustomerPhone: guestPhone.trim() || undefined,
-      customerId: selectedCustomerId || undefined,
+      primaryCustomerName: cleanName,
+      primaryCustomerPhone: cleanPhone || undefined,
+      customerId: finalCustomerId || undefined,
       playersCount,
-      playerNames: [guestName.trim()],
+      playerNames: [cleanName],
       notes: notes.trim() || undefined,
     });
 
@@ -72,7 +90,7 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
     // Reset & close
     setGuestName('');
     setGuestPhone('');
-    setSelectedCustomerId('');
+    setSelectedCustomer(null);
     setNotes('');
     onClose();
   };
@@ -86,81 +104,23 @@ export const StartSessionDialog: React.FC<StartSessionDialogProps> = ({
       maxWidth="md"
     >
       <form onSubmit={handleStart} className="space-y-4">
-        {/* Customer Search / Lookup */}
-        <div>
-          <label className="block text-xs font-semibold text-[#60646C] uppercase tracking-wider mb-1.5">
-            Registered Member Lookup (Optional)
-          </label>
-          <div className="relative">
-            <Search className="absolute left-3 top-3.5 sm:top-3 w-4 h-4 text-[#8B8D98]" />
-            <input
-              type="text"
-              value={customerSearch}
-              onChange={(e) => setCustomerSearch(e.target.value)}
-              placeholder="Search"
-              className="w-full h-[44px] sm:h-[40px] bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] pl-9 pr-3 text-sm text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
-            />
-          </div>
-
-          {matchedCustomers.length > 0 && (
-            <div className="mt-2 bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] p-2 space-y-1">
-              {matchedCustomers.map((cust) => (
-                <button
-                  type="button"
-                  key={cust.id}
-                  onClick={() => handleSelectCustomer(cust)}
-                  className="w-full text-left p-2.5 sm:p-2 rounded-[6px] hover:bg-[#FFFFFF] border border-transparent hover:border-[#B9BBC6] flex items-center justify-between text-xs transition-colors min-h-[44px] sm:min-h-[36px]"
-                >
-                  <div>
-                    <span className="font-semibold text-[#15191E]">{cust.name}</span>
-                    <span className="text-[#60646C] ml-2 font-mono">{cust.phone}</span>
-                  </div>
-                  <span className="text-[10px] uppercase font-bold text-[#006EF5] flex items-center gap-1">
-                    <Star className="w-3 h-3 fill-current" /> {cust.tier}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Guest Details */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-[#15191E] mb-1">
-              Player / Host Name *
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-3.5 sm:top-3 w-4 h-4 text-[#8B8D98]" />
-              <input
-                type="text"
-                required
-                autoComplete="name"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Enter your full name"
-                className="w-full h-[44px] sm:h-[40px] bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] pl-9 pr-3 text-sm text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-[#15191E] mb-1">
-              Mobile Number
-            </label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-3.5 sm:top-3 w-4 h-4 text-[#8B8D98]" />
-              <input
-                type="tel"
-                autoComplete="tel"
-                value={guestPhone}
-                onChange={(e) => setGuestPhone(e.target.value)}
-                placeholder="Enter your phone number"
-                className="w-full h-[44px] sm:h-[40px] bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] pl-9 pr-3 text-sm text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Customer Name & Phone with Auto-Fetch */}
+        <CustomerAutoSuggestInput
+          customerName={guestName}
+          setCustomerName={setGuestName}
+          customerPhone={guestPhone}
+          setCustomerPhone={setGuestPhone}
+          selectedCustomer={selectedCustomer}
+          setSelectedCustomer={setSelectedCustomer}
+          nameLabel="Player / Host Name"
+          phoneLabel="Mobile Number"
+          required={true}
+          onCustomerSelected={(cust) => {
+            if (cust.notes && !notes) {
+              setNotes(cust.notes);
+            }
+          }}
+        />
 
         {/* Players count */}
         <div>

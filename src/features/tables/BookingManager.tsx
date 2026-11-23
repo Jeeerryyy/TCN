@@ -18,9 +18,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
+import { useCustomers } from '../../context/CustomerContext';
+import { CustomerAutoSuggestInput } from '../../components/ui/CustomerAutoSuggestInput';
+import { KnownCustomerSummary } from '../../hooks/useCustomerLookup';
 
 export const BookingManager: React.FC = () => {
   const { tables, bookings, addBooking, cancelBooking, checkInBooking, clearAllBookings } = useTables();
+  const { customers, addCustomer, updateCustomer } = useCustomers();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -30,6 +34,7 @@ export const BookingManager: React.FC = () => {
   const [tableId, setTableId] = useState<string>(tables[0]?.id || '');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<KnownCustomerSummary | null>(null);
   const [bookingDate, setBookingDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('18:00');
   const [durationMinutes, setDurationMinutes] = useState('60');
@@ -45,6 +50,7 @@ export const BookingManager: React.FC = () => {
   const resetForm = () => {
     setCustomerName('');
     setCustomerPhone('');
+    setSelectedCustomer(null);
     setStartTime('18:00');
     setDurationMinutes('60');
     setAdvanceDeposit('');
@@ -66,11 +72,44 @@ export const BookingManager: React.FC = () => {
       return;
     }
 
+    const cleanName = customerName.trim();
+    const cleanPhone = customerPhone.trim();
+    let matchedCustomerId = selectedCustomer?.id;
+
+    // Check if customer is registered in CRM or register them automatically
+    const existingCrm = customers.find(
+      (c) =>
+        c.phone.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '') ||
+        c.name.toLowerCase().trim() === cleanName.toLowerCase()
+    );
+
+    if (existingCrm) {
+      matchedCustomerId = existingCrm.id;
+      updateCustomer(existingCrm.id, {
+        lastVisit: new Date().toISOString(),
+        notes: notes.trim()
+          ? existingCrm.notes
+            ? `${existingCrm.notes}; ${notes.trim()}`
+            : notes.trim()
+          : existingCrm.notes,
+      });
+    } else {
+      // Register customer into CRM so details are permanently auto-fetched in the future
+      const newCust = addCustomer({
+        name: cleanName,
+        phone: cleanPhone,
+        tier: 'standard',
+        notes: notes.trim() || undefined,
+      });
+      matchedCustomerId = newCust.id;
+    }
+
     addBooking({
       tableId: selectedTable.id,
       tableName: selectedTable.name,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerId: matchedCustomerId,
+      customerName: cleanName,
+      customerPhone: cleanPhone,
       bookingDate,
       startTime,
       durationMinutes: parseInt(durationMinutes, 10) || 60,
@@ -81,7 +120,7 @@ export const BookingManager: React.FC = () => {
 
     setIsAddModalOpen(false);
     resetForm();
-    setSuccessMessage(`Reservation for ${customerName} confirmed on ${selectedTable.name}.`);
+    setSuccessMessage(`Reservation for ${cleanName} confirmed on ${selectedTable.name}.`);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
@@ -318,36 +357,23 @@ export const BookingManager: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-medium text-xs text-[#15191E] mb-1">
-                    Customer Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    autoComplete="name"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Enter your full name"
-                    className="w-full h-[40px] px-3 rounded-[6px] bg-[#FFFFFF] border border-[#B9BBC6] text-sm text-[#15191E] placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-xs text-[#15191E] mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    autoComplete="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="Enter your phone number"
-                    className="w-full h-[40px] px-3 rounded-[6px] bg-[#FFFFFF] border border-[#B9BBC6] text-sm text-[#15191E] font-mono placeholder-[#8B8D98] focus:outline-none focus:border-[#006EF5] focus:shadow-[0px_0px_0px_3px_rgba(0,110,245,0.12)] transition-all"
-                  />
-                </div>
-              </div>
+              <CustomerAutoSuggestInput
+                customerName={customerName}
+                setCustomerName={setCustomerName}
+                customerPhone={customerPhone}
+                setCustomerPhone={setCustomerPhone}
+                selectedCustomer={selectedCustomer}
+                setSelectedCustomer={setSelectedCustomer}
+                onCustomerSelected={(cust) => {
+                  if (cust.notes && !notes) {
+                    setNotes(cust.notes);
+                  }
+                  if (cust.preferredGame) {
+                    const matchTable = tables.find((t) => t.type === cust.preferredGame);
+                    if (matchTable) setTableId(matchTable.id);
+                  }
+                }}
+              />
 
               <div>
                 <label className="block font-medium text-xs text-[#15191E] mb-1">

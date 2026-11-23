@@ -76,6 +76,7 @@ export interface TableBooking {
   id: string;
   tableId: string;
   tableName: string;
+  customerId?: string;
   customerName: string;
   customerPhone: string;
   bookingDate: string; // YYYY-MM-DD

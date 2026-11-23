@@ -522,6 +522,7 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       tableId: targetTable.id,
       primaryCustomerName: booking.customerName,
       primaryCustomerPhone: booking.customerPhone,
+      customerId: booking.customerId,
       playersCount: booking.playersCount,
       playerNames: [booking.customerName],
       notes: `Checked in from Reservation #${booking.id.slice(-4)} (Advance Paid: ₹${booking.advanceDeposit}). ${booking.notes || ''}`,
