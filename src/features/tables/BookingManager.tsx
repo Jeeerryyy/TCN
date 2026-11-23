@@ -16,11 +16,14 @@ import {
   X,
   AlertCircle,
   Trash2,
+  FileSpreadsheet,
+  FileText,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { useCustomers } from '../../context/CustomerContext';
 import { CustomerAutoSuggestInput } from '../../components/ui/CustomerAutoSuggestInput';
 import { KnownCustomerSummary } from '../../hooks/useCustomerLookup';
+import { exportBookingsToCSV, exportBookingsToPDF } from '../../utils/exportBookings';
 
 export const BookingManager: React.FC = () => {
   const { tables, bookings, addBooking, cancelBooking, checkInBooking, clearAllBookings } = useTables();
@@ -159,7 +162,25 @@ export const BookingManager: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportBookingsToCSV(bookings)}
+            disabled={bookings.length === 0}
+            title={bookings.length > 0 ? 'Download entire bookings ledger in Excel-compatible CSV format' : 'No bookings available to export'}
+            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0 shadow-[0px_1px_3px_rgba(0,0,0,0.06)]"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#0D9926]" /> Download Entire Excel
+          </button>
+          <button
+            type="button"
+            onClick={() => exportBookingsToPDF(bookings)}
+            disabled={bookings.length === 0}
+            title={bookings.length > 0 ? 'Download and print full A4 structured audit report of all bookings' : 'No bookings available to export'}
+            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0 shadow-[0px_1px_3px_rgba(0,0,0,0.06)]"
+          >
+            <FileText className="w-3.5 h-3.5 text-[#FF5900]" /> Download Entire PDF
+          </button>
           {bookings.length > 0 && (
             <button
               type="button"

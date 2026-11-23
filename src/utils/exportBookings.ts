@@ -1,0 +1,433 @@
+/**
+ * The Cue Nation - Bookings Audit Export Utilities
+ * Provides RFC 4180 CSV (Excel compatible with UTF-8 BOM) and structured printable PDF audit reports.
+ */
+
+import { TableBooking } from '../types/table.types';
+import { formatINR } from './formatters';
+
+function escapeCsvField(value: string | number | undefined | null): string {
+  if (value === undefined || value === null) return '""';
+  const str = String(value).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+function escapeHtml(str: string | undefined | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Exports all booking records into an Excel-friendly CSV file with UTF-8 BOM.
+ */
+export function exportBookingsToCSV(bookings: TableBooking[]): void {
+  if (!bookings || bookings.length === 0) {
+    alert('No booking records available to export.');
+    return;
+  }
+
+  // Sort by booking date and start time descending
+  const sorted = [...bookings].sort((a, b) => {
+    const dateTimeA = `${a.bookingDate} ${a.startTime}`;
+    const dateTimeB = `${b.bookingDate} ${b.startTime}`;
+    return dateTimeB.localeCompare(dateTimeA);
+  });
+
+  const headers = [
+    'Booking Reference',
+    'Customer Name',
+    'Phone Number',
+    'Table Name',
+    'Booking Date',
+    'Start Time',
+    'Duration (Mins)',
+    'Players Count',
+    'Advance Deposit (INR)',
+    'Status',
+    'Notes',
+    'Booked At',
+  ];
+
+  const rows = sorted.map((b) => [
+    escapeCsvField(b.id),
+    escapeCsvField(b.customerName || 'Walk-in Guest'),
+    escapeCsvField(b.customerPhone || 'N/A'),
+    escapeCsvField(b.tableName),
+    escapeCsvField(b.bookingDate),
+    escapeCsvField(b.startTime),
+    escapeCsvField(b.durationMinutes),
+    escapeCsvField(b.playersCount),
+    escapeCsvField(b.advanceDeposit),
+    escapeCsvField(b.status.toUpperCase()),
+    escapeCsvField(b.notes || ''),
+    escapeCsvField(b.createdAt ? new Date(b.createdAt).toLocaleString('en-IN') : ''),
+  ]);
+
+  // Summary Row
+  const totalAdvance = sorted.reduce((sum, b) => sum + (b.advanceDeposit || 0), 0);
+  const confirmedCount = sorted.filter((b) => b.status === 'confirmed').length;
+  const checkedInCount = sorted.filter((b) => b.status === 'checked-in').length;
+  const cancelledCount = sorted.filter((b) => b.status === 'cancelled').length;
+
+  const summaryRow = [
+    escapeCsvField('TOTALS'),
+    escapeCsvField(`Total: ${sorted.length} Bookings`),
+    escapeCsvField(''),
+    escapeCsvField(''),
+    escapeCsvField(''),
+    escapeCsvField(''),
+    escapeCsvField(''),
+    escapeCsvField(''),
+    escapeCsvField(totalAdvance),
+    escapeCsvField(`Confirmed: ${confirmedCount} | Checked-In: ${checkedInCount} | Cancelled: ${cancelledCount}`),
+    escapeCsvField(''),
+    escapeCsvField(`Exported on ${new Date().toLocaleString('en-IN')}`),
+  ];
+
+  const csvContent =
+    '\uFEFF' + // UTF-8 Byte Order Mark for Microsoft Excel compatibility
+    [headers.map((h) => `"${h}"`).join(','), ...rows.map((r) => r.join(',')), summaryRow.join(',')].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  const today = new Date().toISOString().split('T')[0];
+  link.setAttribute('download', `TCN_Bookings_Audit_${today}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates and triggers print/save as PDF for complete bookings audit ledger.
+ */
+export function exportBookingsToPDF(bookings: TableBooking[]): void {
+  if (!bookings || bookings.length === 0) {
+    alert('No booking records available to export.');
+    return;
+  }
+
+  const sorted = [...bookings].sort((a, b) => {
+    const dateTimeA = `${a.bookingDate} ${a.startTime}`;
+    const dateTimeB = `${b.bookingDate} ${b.startTime}`;
+    return dateTimeB.localeCompare(dateTimeA);
+  });
+
+  const totalAdvance = sorted.reduce((sum, b) => sum + (b.advanceDeposit || 0), 0);
+  const confirmedCount = sorted.filter((b) => b.status === 'confirmed').length;
+  const checkedInCount = sorted.filter((b) => b.status === 'checked-in').length;
+  const cancelledCount = sorted.filter((b) => b.status === 'cancelled').length;
+  const exportTimestamp = new Date().toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to open and print the PDF audit report.');
+    return;
+  }
+
+  const tableRowsHtml = sorted
+    .map((b, idx) => {
+      const statusBadge =
+        b.status === 'confirmed'
+          ? '<span class="status-badge status-confirmed">Confirmed</span>'
+          : b.status === 'checked-in'
+          ? '<span class="status-badge status-checked-in">Checked In</span>'
+          : '<span class="status-badge status-cancelled">Cancelled</span>';
+
+      return `
+      <tr>
+        <td class="text-muted text-center">${idx + 1}</td>
+        <td class="font-bold text-mono">${escapeHtml(b.id.slice(-8))}</td>
+        <td class="font-bold">${escapeHtml(b.customerName || 'Walk-in Guest')}</td>
+        <td class="text-mono">${escapeHtml(b.customerPhone || '—')}</td>
+        <td><strong>${escapeHtml(b.tableName)}</strong></td>
+        <td>${escapeHtml(b.bookingDate)}</td>
+        <td class="text-mono">${escapeHtml(b.startTime)}</td>
+        <td class="text-center">${b.durationMinutes}m</td>
+        <td class="text-center">${b.playersCount}</td>
+        <td class="text-right font-bold text-mono">${b.advanceDeposit > 0 ? formatINR(b.advanceDeposit) : '—'}</td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="notes-cell">${escapeHtml(b.notes || '—')}</td>
+      </tr>
+    `;
+    })
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>TCN Bookings Audit Ledger - ${exportTimestamp}</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 12mm 10mm 12mm 10mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #15191E;
+      background: #FFFFFF;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #FF5900;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #000000;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: #60646C;
+      margin-top: 2px;
+    }
+    .doc-meta {
+      text-align: right;
+      font-size: 11px;
+    }
+    .doc-meta .badge {
+      display: inline-block;
+      background: #FF5900;
+      color: #ffffff;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .card {
+      border: 1px solid #B9BBC6;
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: #FAFAFB;
+    }
+    .card-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #60646C;
+      letter-spacing: 0.5px;
+    }
+    .card-value {
+      font-size: 16px;
+      font-weight: 800;
+      color: #000000;
+      margin-top: 2px;
+      font-family: monospace;
+    }
+    .card-highlight {
+      border-color: #FF5900;
+      background: #FFF8F5;
+    }
+    .card-highlight .card-value {
+      color: #FF5900;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    th {
+      background: #F3F3F7;
+      color: #15191E;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      border: 1px solid #B9BBC6;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    td {
+      border: 1px solid #E1E2E8;
+      padding: 6px 8px;
+      vertical-align: middle;
+    }
+    tr:nth-child(even) {
+      background: #FAFAFB;
+    }
+    .font-bold {
+      font-weight: 700;
+    }
+    .text-mono {
+      font-family: monospace;
+      font-size: 10.5px;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .text-muted {
+      color: #8B8D98;
+    }
+    .notes-cell {
+      max-width: 180px;
+      word-break: break-word;
+      font-size: 9.5px;
+      color: #44474E;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .status-confirmed {
+      background: #EBF3FF;
+      color: #006EF5;
+      border: 1px solid #B4D5FE;
+    }
+    .status-checked-in {
+      background: #D1F4D2;
+      color: #0D9926;
+      border: 1px solid #A3E9A6;
+    }
+    .status-cancelled {
+      background: #FEECEB;
+      color: #DE350B;
+      border: 1px solid #FCC4C1;
+    }
+    .footer {
+      margin-top: 16px;
+      border-top: 1px solid #B9BBC6;
+      padding-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9.5px;
+      color: #8B8D98;
+    }
+    @media print {
+      body {
+        padding: 0;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom: 12px; background: #FFF4E5; border: 1px solid #FF5900; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <strong>Print / Save as PDF:</strong> Use your browser print dialog (Ctrl+P or Cmd+P) and choose "Save as PDF" with Landscape orientation.
+    </div>
+    <button onclick="window.print()" style="background: #FF5900; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; font-weight: 600; cursor: pointer;">Print Now</button>
+  </div>
+
+  <div class="header">
+    <div>
+      <div class="brand-title">THE CUE NATION</div>
+      <div class="brand-sub">Floor Operations Suite · Advance Reservations & Master Booking Audit Ledger</div>
+    </div>
+    <div class="doc-meta">
+      <div class="badge">Official Audit Report</div>
+      <div class="text-muted">Generated: ${escapeHtml(exportTimestamp)}</div>
+      <div class="text-muted">Security PIN Verified Administrative Ledger</div>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="card">
+      <div class="card-label">Total Bookings</div>
+      <div class="card-value">${sorted.length}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Confirmed</div>
+      <div class="card-value" style="color: #006EF5;">${confirmedCount}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Checked-In</div>
+      <div class="card-value" style="color: #0D9926;">${checkedInCount}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cancelled</div>
+      <div class="card-value" style="color: #DE350B;">${cancelledCount}</div>
+    </div>
+    <div class="card card-highlight">
+      <div class="card-label">Total Advance Deposit</div>
+      <div class="card-value">${formatINR(totalAdvance)}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25px;">#</th>
+        <th style="width: 70px;">Ref ID</th>
+        <th>Customer Name</th>
+        <th>Phone</th>
+        <th>Table</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th class="text-center">Duration</th>
+        <th class="text-center">Players</th>
+        <th class="text-right">Advance (₹)</th>
+        <th class="text-center">Status</th>
+        <th>Notes / Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRowsHtml}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <div>The Cue Nation · Executive POS & Operations Suite</div>
+    <div>Confidential Audit Ledger · All records verified against local synchronized datastore</div>
+    <div>Page 1 of 1</div>
+  </div>
+
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        window.print();
+      }, 350);
+    });
+  </script>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
