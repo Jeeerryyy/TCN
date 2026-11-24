@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { SystemHeader } from './SystemHeader';
 import { SidebarNav, ActiveNavTab } from './SidebarNav';
 import { PWAInstallPrompt } from '../ui/PWAInstallPrompt';
-import { LayoutDashboard, Grid, Coffee, ChefHat, Menu } from 'lucide-react';
+import { LayoutDashboard, Grid, Coffee, ChefHat, Menu, Plus } from 'lucide-react';
 import { useCafe } from '../../context/CafeContext';
 import { useTables } from '../../context/TableContext';
 
@@ -21,7 +21,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const { activeKitchenOrders } = useCafe();
-  const { activeSessionsMap } = useTables();
+  const { activeSessionsMap, openNewBookingModal } = useTables();
   const activeTablesCount = Object.keys(activeSessionsMap).length;
 
   return (
@@ -76,6 +76,22 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {activeTablesCount > 0 && (
             <span className="absolute top-1.5 right-1/4 w-2 h-2 rounded-full bg-[#0D9926]" />
           )}
+        </button>
+
+        {/* Central Mobile Action Button: + New Booking */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelectTab('bookings');
+            openNewBookingModal();
+          }}
+          className="flex flex-col items-center justify-center flex-1 h-full min-h-[44px] relative transition-colors text-[#FF5900] group"
+          title="Create New Table Booking"
+        >
+          <div className="w-7 h-7 rounded-full bg-[#FF5900] text-white flex items-center justify-center shadow-sm group-active:scale-95 transition-transform">
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+          </div>
+          <span className="text-[10px] mt-0.5 font-bold text-[#FF5900]">+ Book</span>
         </button>
 
         <button

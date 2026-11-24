@@ -38,6 +38,9 @@ interface TableContextType {
   cancelBooking: (bookingId: string) => void;
   checkInBooking: (bookingId: string) => boolean;
   clearAllBookings: () => void;
+  isNewBookingModalOpen: boolean;
+  openNewBookingModal: () => void;
+  closeNewBookingModal: () => void;
   tickCounter: number; // Incrementing counter every second to drive live timers
   isLoading: boolean;
   isSyncing: boolean;
@@ -57,6 +60,11 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [bookings, setBookings] = useState<TableBooking[]>(() =>
     loadFromStorage('bookings', INITIAL_BOOKINGS)
   );
+
+  // Global new reservation modal state (accessible via footer CTA anywhere)
+  const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
+  const openNewBookingModal = () => setIsNewBookingModalOpen(true);
+  const closeNewBookingModal = () => setIsNewBookingModalOpen(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -571,6 +579,9 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cancelBooking,
         checkInBooking,
         clearAllBookings,
+        isNewBookingModalOpen,
+        openNewBookingModal,
+        closeNewBookingModal,
         tickCounter,
         isLoading,
         isSyncing,

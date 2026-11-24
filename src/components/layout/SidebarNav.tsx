@@ -16,6 +16,7 @@ import {
   KeyRound,
   LogOut,
   X,
+  Plus,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useCafe } from '../../context/CafeContext';
@@ -51,7 +52,7 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
   onCloseMobile,
 }) => {
   const { activeKitchenOrders } = useCafe();
-  const { activeSessionsMap, bookings } = useTables();
+  const { activeSessionsMap, bookings, openNewBookingModal } = useTables();
   const { currentUser, isAdmin, logout } = useAuth();
 
   const handleTabClick = (tab: ActiveNavTab) => {
@@ -217,8 +218,22 @@ export const SidebarNav: React.FC<SidebarNavProps> = ({
       </div>
 
       {/* Footer User Profile & Lock Terminal Button */}
-      <div className="p-3.5 border-t border-[#B9BBC6] bg-[#FCFCFD] space-y-2 shrink-0">
-        <div className="flex items-center justify-between">
+      <div className="p-3 border-t border-[#B9BBC6] bg-[#FCFCFD] space-y-2.5 shrink-0">
+        {/* Quick New Booking CTA Button in Sticky Footer */}
+        <button
+          type="button"
+          onClick={() => {
+            handleTabClick('bookings');
+            openNewBookingModal();
+          }}
+          className="w-full h-[38px] px-3 rounded-[6px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all border border-[#42578A]/15 group"
+          title="Create new table reservation"
+        >
+          <Plus className="w-4 h-4 stroke-[2.5] transition-transform group-hover:scale-110" />
+          <span>+ New Booking</span>
+        </button>
+
+        <div className="flex items-center justify-between pt-0.5">
           <div className="flex items-center gap-2.5 min-w-0">
             <div
               className={`w-8 h-8 rounded-full border flex items-center justify-center text-xs font-semibold shrink-0 ${

@@ -27,10 +27,21 @@ import { KnownCustomerSummary } from '../../hooks/useCustomerLookup';
 import { exportBookingsToCSV, exportBookingsToPDF } from '../../utils/exportBookings';
 
 export const BookingManager: React.FC = () => {
-  const { tables, bookings, addBooking, cancelBooking, checkInBooking, clearAllBookings } = useTables();
+  const {
+    tables,
+    bookings,
+    addBooking,
+    cancelBooking,
+    checkInBooking,
+    clearAllBookings,
+    isNewBookingModalOpen,
+    openNewBookingModal,
+    closeNewBookingModal,
+  } = useTables();
   const { customers, addCustomer, updateCustomer } = useCustomers();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const isModalOpen = isAddModalOpen || isNewBookingModalOpen;
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -86,6 +97,24 @@ export const BookingManager: React.FC = () => {
     setNotes('');
     setErrorMessage(null);
   };
+
+  const handleOpenModal = () => {
+    resetForm();
+    setIsAddModalOpen(true);
+    openNewBookingModal();
+  };
+
+  const handleCloseModal = () => {
+    setIsAddModalOpen(false);
+    closeNewBookingModal();
+  };
+
+  // Sync when opened externally via global footer CTA
+  React.useEffect(() => {
+    if (isNewBookingModalOpen) {
+      resetForm();
+    }
+  }, [isNewBookingModalOpen]);
 
   const handleCreateBooking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,7 +175,7 @@ export const BookingManager: React.FC = () => {
       notes: notes.trim(),
     });
 
-    setIsAddModalOpen(false);
+    handleCloseModal();
     resetForm();
     setSuccessMessage(`Reservation for ${cleanName} confirmed on ${selectedTable.name}.`);
     setTimeout(() => setSuccessMessage(null), 3000);
@@ -235,10 +264,7 @@ export const BookingManager: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => {
-              resetForm();
-              setIsAddModalOpen(true);
-            }}
+            onClick={handleOpenModal}
             className="h-[40px] px-4 rounded-[8px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-sm font-medium transition-colors duration-150 border border-[rgba(66,87,138,0.15)] flex items-center gap-2 shrink-0 shadow-sm"
           >
             <Plus className="w-4 h-4" /> New Reservation
@@ -508,7 +534,7 @@ export const BookingManager: React.FC = () => {
       </div>
 
       {/* New Reservation Modal */}
-      {isAddModalOpen && (
+      {isModalOpen && (
         <div className="fixed inset-0 z-[2000] bg-black/40 flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-[#FFFFFF] border border-[#B9BBC6] rounded-[10px] shadow-[0px_12px_32px_rgba(0,0,0,0.20)] overflow-hidden">
             <div className="px-6 py-4 border-b border-[#B9BBC6] flex items-center justify-between">
@@ -517,7 +543,7 @@ export const BookingManager: React.FC = () => {
               </h3>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={handleCloseModal}
                 className="p-1.5 rounded-[6px] hover:bg-[#15191E]/[0.08] text-[#60646C] transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -644,7 +670,7 @@ export const BookingManager: React.FC = () => {
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-[#B9BBC6]">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={handleCloseModal}
                   className="h-[40px] px-4 rounded-[6px] border border-[#15191E] text-[#15191E] font-normal hover:bg-[#15191E]/[0.08] transition-colors"
                 >
                   Cancel

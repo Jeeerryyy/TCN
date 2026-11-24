@@ -27,6 +27,7 @@ import {
   Calendar,
   CheckCircle2,
   Flame,
+  Plus,
 } from 'lucide-react';
 import { ActiveNavTab } from '../../components/layout/SidebarNav';
 import { DashboardAnalyticsCharts } from './DashboardAnalyticsCharts';
@@ -37,8 +38,10 @@ interface DashboardOverviewProps {
   onNavigate: (tab: ActiveNavTab) => void;
 }
 
+type DashboardViewMode = 'floor' | 'cloth_care' | 'analytics' | 'all';
+
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  const { tables, sessions } = useTables();
+  const { tables, sessions, openNewBookingModal } = useTables();
   const { orders, activeKitchenOrders, setSelectedTableId, setCartDestination } = useCafe();
   const { bills, activeBillModal, setActiveBillModal } = useBilling();
   const { customers } = useCustomers();
@@ -48,6 +51,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const [transferModalTable, setTransferModalTable] = useState<Table | null>(null);
   const [settleModalTable, setSettleModalTable] = useState<Table | null>(null);
   const [adminRevenueMode, setAdminRevenueMode] = useState<'per_day' | 'overall'>('per_day');
+  const [viewMode, setViewMode] = useState<DashboardViewMode>('floor');
 
   // Live KPI Calculations
   const occupiedTables = tables.filter((t) => t.status === 'occupied' || t.status === 'paused');
@@ -69,9 +73,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const overallRevenue = overallBills.reduce((sum, b) => sum + b.finalTotal, 0);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4">
       {/* Welcome Banner & Quick Shift Summary */}
-      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0px_2px_8px_rgba(0,0,0,0.06)]">
         <div>
           <div className="text-xs uppercase font-semibold text-[#FF5900] tracking-wider flex items-center gap-1.5 mb-1">
             <Sparkles className="w-3.5 h-3.5" /> {isAdmin ? 'Executive Suite Active' : 'Floor Shift Active'}
@@ -85,18 +89,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
 
         {/* Quick Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             type="button"
-            onClick={() => onNavigate('tables')}
-            className="h-[40px] px-3.5 sm:px-4 rounded-[8px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-xs font-normal transition-colors flex items-center gap-2 border border-[#42578A]/15 shrink-0"
+            onClick={() => {
+              onNavigate('bookings');
+              openNewBookingModal();
+            }}
+            className="h-[38px] px-3.5 rounded-[6px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-xs font-semibold transition-colors flex items-center gap-1.5 border border-[#42578A]/15 shrink-0 shadow-sm"
           >
-            <Play className="w-3.5 h-3.5 fill-current" /> Manage Floor
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> + New Booking
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('floor');
+              onNavigate('tables');
+            }}
+            className="h-[38px] px-3.5 rounded-[6px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#15191E] border border-[#B9BBC6] text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0"
+          >
+            <Play className="w-3.5 h-3.5 fill-current text-[#006EF5]" /> Manage Floor
           </button>
           <button
             type="button"
             onClick={() => onNavigate('bookings')}
-            className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-2 shrink-0"
+            className="h-[38px] px-3 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-1.5 shrink-0"
           >
             <Calendar className="w-3.5 h-3.5 text-[#006EF5]" /> Bookings
           </button>
@@ -104,19 +121,20 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <>
               <button
                 type="button"
-                onClick={() => {
-                  const el = document.getElementById('admin-table-ironing-tracker');
-                  el?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-[#FFF4ED] hover:bg-[#FFE8D6] text-[#FF5900] border border-[#FF5900]/40 text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 shadow-sm"
-                title="Jump to Daily Table Usage & Ironing Tracker"
+                onClick={() => setViewMode('cloth_care')}
+                className={`h-[38px] px-3 rounded-[6px] text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 border ${
+                  viewMode === 'cloth_care'
+                    ? 'bg-[#FF5900] text-white border-[#FF5900]'
+                    : 'bg-[#FFF4ED] hover:bg-[#FFE8D6] text-[#FF5900] border-[#FF5900]/40'
+                }`}
+                title="Open Daily Table Hours & Cloth Ironing Tracker"
               >
-                <Flame className="w-3.5 h-3.5 text-[#FF5900]" /> Table Hours & Ironing
+                <Flame className="w-3.5 h-3.5 text-current" /> Table Hours & Ironing
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('table-studio')}
-                className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-2 shrink-0"
+                className="h-[38px] px-3 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-1.5 shrink-0"
               >
                 <Sliders className="w-3.5 h-3.5 text-[#006EF5]" /> Table Studio
               </button>
@@ -129,10 +147,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               setCartDestination('counter');
               onNavigate('cafe');
             }}
-            className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-2 shrink-0"
+            className="h-[38px] px-3 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-1.5 shrink-0"
             title="Order snacks & drinks separately for walk-in customer"
           >
-            <Coffee className="w-3.5 h-3.5 text-[#FFA500]" /> Snacks & Drinks Bill
+            <Coffee className="w-3.5 h-3.5 text-[#FFA500]" /> Café Bill
           </button>
         </div>
       </div>
@@ -183,10 +201,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
       </div>
 
       {/* 4 Primary Operational Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* KPI 1: Revenue (Admin-Only with Live Per-Day vs Overall Switcher) OR Vacant Tables (Staff View) */}
         {isAdmin ? (
-          <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-5 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)] flex flex-col justify-between">
+          <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.06)] flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between text-[#60646C]">
                 <div className="flex items-center gap-1.5">
@@ -255,7 +273,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         ) : (
           /* Staff View: Operational Vacant Tables metric instead of Total Revenue */
-          <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-6 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+          <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.06)]">
             <div className="flex items-center justify-between text-[#60646C]">
               <span className="text-xs font-semibold uppercase tracking-wider">Vacant Tables</span>
               <div className="w-8 h-8 rounded-[6px] bg-[#D1F4D2] text-[#0D9926] flex items-center justify-center border border-[#0D9926]/20">
@@ -272,7 +290,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         )}
 
         {/* KPI 2: Live Playing Tables */}
-        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-6 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between text-[#60646C]">
             <span className="text-xs font-semibold uppercase tracking-wider">Occupied Tables</span>
             <div className="w-8 h-8 rounded-[6px] bg-[#FFA500]/15 text-[#FFA500] flex items-center justify-center border border-[#FFA500]/30">
@@ -288,7 +306,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
 
         {/* KPI 3: Kitchen KOT Tickets */}
-        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-6 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between text-[#60646C]">
             <span className="text-xs font-semibold uppercase tracking-wider">Pending KOTs</span>
             <div className="w-8 h-8 rounded-[6px] bg-[#D5E8FB] text-[#006EF5] flex items-center justify-center border border-[#006EF5]/20">
@@ -313,7 +331,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
 
         {/* KPI 4: Registered Customer Base */}
-        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-6 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
+        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 space-y-2 shadow-[0px_2px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between text-[#60646C]">
             <span className="text-xs font-semibold uppercase tracking-wider">Club Members</span>
             <div className="w-8 h-8 rounded-[6px] bg-[#E6E2FF] text-[#3C16D5] flex items-center justify-center border border-[#3C16D5]/20">
@@ -329,15 +347,90 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
       </div>
 
-      {/* Admin Table Usage & Daily Cloth Ironing Tracker (All 6 Tables) */}
+      {/* Executive Segmented View Mode Switcher (Reduces Endless Scrolling on Admin Dashboard) */}
       {isAdmin && (
+        <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-[0px_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#60646C] pl-1.5 hidden sm:inline">
+              Dashboard View:
+            </span>
+            <div className="inline-flex p-1 bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] text-xs font-semibold gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('floor')}
+                className={`px-3 py-1.5 rounded-[4px] transition-all flex items-center gap-1.5 ${
+                  viewMode === 'floor'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.10)] font-bold'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Floor & Live Boards</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[#FFF4ED] text-[#FF5900] border border-[#FF5900]/20 font-bold">
+                  {tables.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('cloth_care')}
+                className={`px-3 py-1.5 rounded-[4px] transition-all flex items-center gap-1.5 ${
+                  viewMode === 'cloth_care'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.10)] font-bold'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5 text-[#FF5900]" />
+                <span>Table Hours & Ironing</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-[#FFF4ED] text-[#FF5900] border border-[#FF5900]/20 font-bold">
+                  Daily
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('analytics')}
+                className={`px-3 py-1.5 rounded-[4px] transition-all flex items-center gap-1.5 ${
+                  viewMode === 'analytics'
+                    ? 'bg-[#FFFFFF] text-[#006EF5] shadow-[0px_1px_2px_rgba(0,0,0,0.10)] font-bold'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-[#006EF5]" />
+                <span>Revenue & Analytics</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('all')}
+                className={`px-2.5 py-1.5 rounded-[4px] transition-all ${
+                  viewMode === 'all'
+                    ? 'bg-[#FFFFFF] text-[#15191E] shadow-[0px_1px_2px_rgba(0,0,0,0.10)] font-bold'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                }`}
+                title="Display all operational widgets stacked together"
+              >
+                All in One
+              </button>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-[#60646C] pr-2 hidden lg:flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#0D9926]" />
+            <span>Compact view active • {tables.length} tables online</span>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Table Usage & Daily Cloth Ironing Tracker (All 6 Tables) */}
+      {isAdmin && (viewMode === 'cloth_care' || viewMode === 'all') && (
         <ErrorBoundary fallbackTitle="Table Usage & Ironing Tracker">
           <AdminTableUsageTracker />
         </ErrorBoundary>
       )}
 
       {/* Admin Analytics Recharts Section (Performance Graphs) */}
-      {isAdmin && (
+      {isAdmin && (viewMode === 'analytics' || viewMode === 'all') && (
         <ErrorBoundary fallbackTitle="Analytics Charts">
           <DashboardAnalyticsCharts
             bills={bills}
@@ -348,37 +441,68 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
       )}
 
       {/* Active Floor Plan Real-Time Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-[16px] font-medium text-[#000000]">
-              Active Playing Floor
-            </h3>
-            <span className="text-[12px] font-mono text-[#60646C]">
-              ({tables.length} Pool & Snooker Boards)
-            </span>
+      {(viewMode === 'floor' || viewMode === 'all' || !isAdmin) && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[16px] font-medium text-[#000000]">
+                Active Playing Floor
+              </h3>
+              <span className="text-[12px] font-mono text-[#60646C]">
+                ({tables.length} Pool & Snooker Boards)
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('tables')}
+              className="text-[14px] font-normal text-[#006EF5] hover:underline flex items-center gap-1 transition-colors"
+            >
+              Full Floor View <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {tables.map((table) => (
+              <TableCard
+                key={table.id}
+                table={table}
+                onStartSession={(tbl) => setSessionModalTable(tbl)}
+                onTransfer={(tbl) => setTransferModalTable(tbl)}
+                onAddCafeOrder={() => onNavigate('cafe')}
+                onSettleBill={(tbl) => setSettleModalTable(tbl)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Executive Bottom Action Bar */}
+      <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-[0px_2px_8px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-2 text-xs text-[#60646C]">
+          <span className="w-2 h-2 rounded-full bg-[#0D9926] animate-pulse" />
+          <span>Floor System Live • {tables.length} tables active • {occupiedTables.length} playing • {activeKitchenOrders.length} kitchen tickets</span>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => onNavigate('tables')}
-            className="text-[14px] font-normal text-[#006EF5] hover:underline flex items-center gap-1 transition-colors"
+            onClick={() => onNavigate('bookings')}
+            className="flex-1 sm:flex-initial h-[36px] px-3.5 rounded-[6px] bg-[#FFFFFF] hover:bg-[#F3F3F7] text-[#15191E] border border-[#B9BBC6] text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
-            Full Floor View <ArrowRight className="w-3.5 h-3.5" />
+            <Calendar className="w-3.5 h-3.5 text-[#006EF5]" />
+            <span>View Bookings</span>
           </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {tables.map((table) => (
-            <TableCard
-              key={table.id}
-              table={table}
-              onStartSession={(tbl) => setSessionModalTable(tbl)}
-              onTransfer={(tbl) => setTransferModalTable(tbl)}
-              onAddCafeOrder={() => onNavigate('cafe')}
-              onSettleBill={(tbl) => setSettleModalTable(tbl)}
-            />
-          ))}
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate('bookings');
+              openNewBookingModal();
+            }}
+            className="flex-1 sm:flex-initial h-[36px] px-4 rounded-[6px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>+ New Booking</span>
+          </button>
         </div>
       </div>
 
