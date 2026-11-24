@@ -107,4 +107,35 @@ export function clearAllStorageData(): void {
   }
 }
 
+// Table Ironing & Maintenance Checklist persistence
+export interface StoredIroningRecord {
+  tableId: string;
+  tableName: string;
+  date: string; // YYYY-MM-DD
+  ironedAt: string; // ISO timestamp
+  ironedBy: string;
+  notes?: string;
+}
+
+export function loadIroningLogs(): Record<string, StoredIroningRecord> {
+  return loadFromStorage<Record<string, StoredIroningRecord>>('table_ironing_logs', {});
+}
+
+export function saveIroningLog(record: StoredIroningRecord): void {
+  const key = `${record.date}_${record.tableId}`;
+  const logs = loadIroningLogs();
+  logs[key] = record;
+  saveToStorage('table_ironing_logs', logs);
+}
+
+export function deleteIroningLog(date: string, tableId: string): void {
+  const key = `${date}_${tableId}`;
+  const logs = loadIroningLogs();
+  if (logs[key]) {
+    delete logs[key];
+    saveToStorage('table_ironing_logs', logs);
+  }
+}
+
+
 

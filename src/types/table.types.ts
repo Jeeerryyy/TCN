@@ -88,3 +88,34 @@ export interface TableBooking {
   notes?: string;
   createdAt: string;
 }
+
+export type TableClothWearLevel = 'heavy' | 'moderate' | 'light' | 'idle';
+
+export interface TableDailyUsageSummary {
+  tableId: string;
+  tableName: string;
+  shortCode: string;
+  tableType: TableType;
+  size: string;
+  clothColor: string;
+  date: string; // YYYY-MM-DD
+  usedMinutes: number;
+  usedHoursDecimal: number;
+  bookedMinutes: number;
+  bookedHoursDecimal: number;
+  sessionCount: number;
+  bookingCount: number;
+  isCurrentlyPlaying: boolean;
+  wearLevel: TableClothWearLevel;
+  ironingRecord?: TableIroningRecord;
+}
+
+export interface TableIroningRecord {
+  tableId: string;
+  tableName: string;
+  date: string; // YYYY-MM-DD
+  ironedAt: string; // ISO string
+  ironedBy: string; // e.g., 'Admin' or 'Staff Name'
+  notes?: string;
+}
+

@@ -44,6 +44,7 @@ export const DashboardAnalyticsCharts: React.FC<DashboardAnalyticsChartsProps> =
   }, []);
 
   const [timeFilter, setTimeFilter] = useState<TimeRangeFilter>('7days');
+  const [tableChartMode, setTableChartMode] = useState<'category' | 'individual'>('individual');
   const [customStart, setCustomStart] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
@@ -152,6 +153,51 @@ export const DashboardAnalyticsCharts: React.FC<DashboardAnalyticsChartsProps> =
     ];
   }, [filteredSessions]);
 
+  // 2b. Individual 6 Tables Usage Breakdown
+  const sixTablesUsageData = useMemo(() => {
+    const tableConfigs = [
+      { id: 'tbl_p1', shortCode: 'P1', name: 'Pool 1', fill: '#FF5900' },
+      { id: 'tbl_p2', shortCode: 'P2', name: 'Pool 2', fill: '#FF5900' },
+      { id: 'tbl_p3', shortCode: 'P3', name: 'Pool 3', fill: '#FF7A29' },
+      { id: 'tbl_s1', shortCode: 'S1', name: 'Snooker 1', fill: '#006EF5' },
+      { id: 'tbl_s2', shortCode: 'S2', name: 'Snooker 2', fill: '#006EF5' },
+      { id: 'tbl_s3', shortCode: 'S3', name: 'Snooker 3', fill: '#2A85FF' },
+    ];
+
+    const map = new Map(
+      tableConfigs.map((t) => [
+        t.id,
+        { name: t.shortCode, fullName: t.name, hours: 0, sessions: 0, fill: t.fill },
+      ])
+    );
+
+    filteredSessions.forEach((s) => {
+      let entry = map.get(s.tableId);
+      if (!entry) {
+        for (const [, cfg] of map.entries()) {
+          if (s.tableName?.toLowerCase().includes(cfg.fullName.toLowerCase())) {
+            entry = cfg;
+            break;
+          }
+        }
+      }
+
+      if (entry) {
+        const startMs = new Date(s.startTime).getTime();
+        const endMs = s.endTime ? new Date(s.endTime).getTime() : Date.now();
+        const pausedMs = s.totalPausedDurationMs || 0;
+        const playMinutes = Math.max(1, Math.round((endMs - startMs - pausedMs) / 60000));
+        entry.hours += playMinutes / 60;
+        entry.sessions += 1;
+      }
+    });
+
+    return Array.from(map.values()).map((e) => ({
+      ...e,
+      hours: Number(e.hours.toFixed(1)),
+    }));
+  }, [filteredSessions]);
+
   // 3. Cafe Sales vs Table Sales Data
   const salesSplitData = useMemo(() => {
     let tableRevenue = 0;
@@ -249,11 +295,10 @@ export const DashboardAnalyticsCharts: React.FC<DashboardAnalyticsChartsProps> =
               key={tab}
               type="button"
               onClick={() => setTimeFilter(tab)}
-              className={`px-3 py-1.5 rounded-[6px] transition-all ${
-                timeFilter === tab
+              className={`px-3 py-1.5 rounded-[6px] transition-all ${timeFilter === tab
                   ? 'bg-[#FFFFFF] text-[#FF5900] font-bold shadow-[0px_1px_3px_rgba(0,0,0,0.08)]'
                   : 'text-[#60646C] hover:text-[#000000]'
-              }`}
+                }`}
             >
               {tab === 'today' ? 'Today' : tab === '7days' ? 'Last 7 Days' : tab === '30days' ? 'Last 30 Days' : 'Custom'}
             </button>
@@ -325,19 +370,45 @@ export const DashboardAnalyticsCharts: React.FC<DashboardAnalyticsChartsProps> =
           </div>
         </div>
 
-        {/* Chart 2: Table Usage by Pool vs Snooker */}
+        {/* Chart 2: Table Usage by Pool vs Snooker or 6 Tables */}
         <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] p-4 sm:p-5 space-y-3 shadow-[0px_1px_4px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-[#006EF5]" />
-              <h4 className="text-sm font-semibold text-[#15191E]">Table Usage: Pool vs Snooker</h4>
+              <h4 className="text-sm font-semibold text-[#15191E]">Table Hours Played</h4>
             </div>
-            <span className="text-xs font-mono text-[#60646C]">Hours Played</span>
+
+            {/* View Toggle */}
+            <div className="inline-flex p-0.5 bg-[#F3F3F7] border border-[#B9BBC6] rounded-[6px] text-[10px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setTableChartMode('individual')}
+                className={`px-2 py-0.5 rounded-[4px] transition-all ${tableChartMode === 'individual'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-sm'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                  }`}
+              >
+                All 6 Tables
+              </button>
+              <button
+                type="button"
+                onClick={() => setTableChartMode('category')}
+                className={`px-2 py-0.5 rounded-[4px] transition-all ${tableChartMode === 'category'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-sm'
+                    : 'text-[#60646C] hover:text-[#000000]'
+                  }`}
+              >
+                Pool vs Snooker
+              </button>
+            </div>
           </div>
 
           <div className="w-full h-[240px]">
             <ResponsiveContainer width="100%" height={240} debounce={50}>
-              <BarChart data={tableUsageData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <BarChart
+                data={tableChartMode === 'individual' ? sixTablesUsageData : tableUsageData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#E6E8EB" vertical={false} />
                 <XAxis dataKey="name" stroke="#8B8D98" fontSize={11} tickLine={false} />
                 <YAxis stroke="#8B8D98" fontSize={11} tickLine={false} tickFormatter={(val) => `${val}h`} />
@@ -345,8 +416,8 @@ export const DashboardAnalyticsCharts: React.FC<DashboardAnalyticsChartsProps> =
                   formatter={(val: any) => [`${val} Hours`, 'Game Playtime']}
                   contentStyle={{ backgroundColor: '#15191E', borderRadius: '8px', border: 'none', color: '#FFF', fontSize: '11px' }}
                 />
-                <Bar dataKey="hours" radius={[6, 6, 0, 0]} barSize={48}>
-                  {tableUsageData.map((entry, index) => (
+                <Bar dataKey="hours" radius={[6, 6, 0, 0]} barSize={tableChartMode === 'individual' ? 28 : 48}>
+                  {(tableChartMode === 'individual' ? sixTablesUsageData : tableUsageData).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
                 </Bar>

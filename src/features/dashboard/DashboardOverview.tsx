@@ -26,9 +26,11 @@ import {
   Sliders,
   Calendar,
   CheckCircle2,
+  Flame,
 } from 'lucide-react';
 import { ActiveNavTab } from '../../components/layout/SidebarNav';
 import { DashboardAnalyticsCharts } from './DashboardAnalyticsCharts';
+import { AdminTableUsageTracker } from './AdminTableUsageTracker';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 
 interface DashboardOverviewProps {
@@ -99,13 +101,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <Calendar className="w-3.5 h-3.5 text-[#006EF5]" /> Bookings
           </button>
           {isAdmin && (
-            <button
-              type="button"
-              onClick={() => onNavigate('table-studio')}
-              className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-2 shrink-0"
-            >
-              <Sliders className="w-3.5 h-3.5 text-[#006EF5]" /> Table Studio
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const el = document.getElementById('admin-table-ironing-tracker');
+                  el?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-[#FFF4ED] hover:bg-[#FFE8D6] text-[#FF5900] border border-[#FF5900]/40 text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 shadow-sm"
+                title="Jump to Daily Table Usage & Ironing Tracker"
+              >
+                <Flame className="w-3.5 h-3.5 text-[#FF5900]" /> Table Hours & Ironing
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('table-studio')}
+                className="h-[40px] px-3 sm:px-3.5 rounded-[6px] bg-transparent hover:bg-[#15191E]/[0.08] text-[#15191E] border border-[#15191E] text-xs font-normal transition-colors flex items-center gap-2 shrink-0"
+              >
+                <Sliders className="w-3.5 h-3.5 text-[#006EF5]" /> Table Studio
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -199,8 +214,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   type="button"
                   onClick={() => setAdminRevenueMode('per_day')}
                   className={`px-2 py-0.5 rounded-[4px] transition-all ${adminRevenueMode === 'per_day'
-                      ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
-                      : 'text-[#60646C] hover:text-[#000000]'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
+                    : 'text-[#60646C] hover:text-[#000000]'
                     }`}
                 >
                   Per Day (Live)
@@ -209,8 +224,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   type="button"
                   onClick={() => setAdminRevenueMode('overall')}
                   className={`px-2 py-0.5 rounded-[4px] transition-all ${adminRevenueMode === 'overall'
-                      ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
-                      : 'text-[#60646C] hover:text-[#000000]'
+                    ? 'bg-[#FFFFFF] text-[#FF5900] shadow-[0px_1px_2px_rgba(0,0,0,0.08)]'
+                    : 'text-[#60646C] hover:text-[#000000]'
                     }`}
                 >
                   Overall
@@ -313,6 +328,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
       </div>
+
+      {/* Admin Table Usage & Daily Cloth Ironing Tracker (All 6 Tables) */}
+      {isAdmin && (
+        <ErrorBoundary fallbackTitle="Table Usage & Ironing Tracker">
+          <AdminTableUsageTracker />
+        </ErrorBoundary>
+      )}
 
       {/* Admin Analytics Recharts Section (Performance Graphs) */}
       {isAdmin && (
