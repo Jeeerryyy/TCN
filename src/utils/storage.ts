@@ -6,22 +6,10 @@
 const STORAGE_VERSION_KEY = 'tcn_schema_version';
 const CURRENT_STORAGE_VERSION = 'v4.1.0-clean-cafe-orders';
 
-// Purge legacy local cache so client devices open with a 100% clean slate synced with Supabase
+// Legacy temporary cache keys to purge (never purge operational business data)
 const KEYS_TO_PURGE = [
   'tcn_tcn_bookings',
   'tcn_current_user',
-  'menu',
-  'tcn_menu',
-  'menu_items',
-  'tcn_menu_items',
-  'bills',
-  'tcn_bills',
-  'orders',
-  'tcn_orders',
-  'sessions',
-  'tcn_sessions',
-  'bookings',
-  'tcn_bookings',
 ];
 
 // Automatically purge legacy temporary cache keys on version upgrade

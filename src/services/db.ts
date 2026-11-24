@@ -713,7 +713,7 @@ export const dbService = {
       return;
     }
     try {
-      await supabase.from('bookings').upsert({
+      const { error } = await supabase.from('bookings').upsert({
         id: booking.id,
         table_id: booking.tableId,
         table_name: booking.tableName,
@@ -728,6 +728,10 @@ export const dbService = {
         notes: booking.notes || null,
         created_at: booking.createdAt,
       });
+      if (error) {
+        console.warn('[DB Sync] Booking sync error, queued offline:', error);
+        enqueueOfflineMutation({ type: 'booking', action: 'UPSERT', payload: booking });
+      }
     } catch (e) {
       console.warn('[DB Sync] Booking sync deferred, queued offline:', e);
       enqueueOfflineMutation({ type: 'booking', action: 'UPSERT', payload: booking });

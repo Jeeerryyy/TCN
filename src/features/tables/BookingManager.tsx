@@ -61,29 +61,40 @@ export const BookingManager: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'checked-in' | 'cancelled'>('all');
 
-  const confirmedBookings = bookings.filter((b) => b.status === 'confirmed');
-  const checkedInBookings = bookings.filter((b) => b.status === 'checked-in');
-  const cancelledBookings = bookings.filter((b) => b.status === 'cancelled');
+  const confirmedBookings = bookings.filter((b) => (b.status || 'confirmed').toLowerCase() === 'confirmed');
+  const checkedInBookings = bookings.filter((b) => (b.status || '').toLowerCase() === 'checked-in');
+  const cancelledBookings = bookings.filter((b) => (b.status || '').toLowerCase() === 'cancelled');
 
   const totalDepositCollected = bookings
-    .filter((b) => b.status !== 'cancelled')
-    .reduce((sum, b) => sum + b.advanceDeposit, 0);
+    .filter((b) => (b.status || '').toLowerCase() !== 'cancelled')
+    .reduce((sum, b) => sum + (Number(b.advanceDeposit) || 0), 0);
 
   // Filtered bookings for the Reservation Book table
   const filteredBookings = React.useMemo(() => {
-    return bookings.filter((b) => {
-      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const matchName = b.customerName?.toLowerCase().includes(query);
-        const matchPhone = b.customerPhone?.includes(query);
-        const matchTable = b.tableName?.toLowerCase().includes(query);
-        const matchNotes = b.notes?.toLowerCase().includes(query);
-        const matchDate = b.bookingDate?.includes(query);
-        if (!matchName && !matchPhone && !matchTable && !matchNotes && !matchDate) return false;
-      }
-      return true;
-    });
+    return bookings
+      .filter((b) => {
+        if (statusFilter !== 'all') {
+          const norm = (b.status || 'confirmed').toLowerCase();
+          if (norm !== statusFilter) return false;
+        }
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim();
+          const matchName = b.customerName?.toLowerCase().includes(query);
+          const matchPhone = b.customerPhone?.includes(query);
+          const matchTable = b.tableName?.toLowerCase().includes(query);
+          const matchNotes = b.notes?.toLowerCase().includes(query);
+          const matchDate = b.bookingDate?.includes(query);
+          const matchId = b.id?.toLowerCase().includes(query);
+          if (!matchName && !matchPhone && !matchTable && !matchNotes && !matchDate && !matchId) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        // Sort newest / upcoming first
+        const dateA = `${a.bookingDate || ''} ${a.startTime || ''}`;
+        const dateB = `${b.bookingDate || ''} ${b.startTime || ''}`;
+        return dateB.localeCompare(dateA);
+      });
   }, [bookings, statusFilter, searchQuery]);
 
   const resetForm = () => {

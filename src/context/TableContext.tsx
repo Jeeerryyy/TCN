@@ -57,9 +57,29 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loadFromStorage('sessions', INITIAL_SESSIONS)
   );
 
-  const [bookings, setBookings] = useState<TableBooking[]>(() =>
-    loadFromStorage('bookings', INITIAL_BOOKINGS)
-  );
+  const [bookings, setBookings] = useState<TableBooking[]>(() => {
+    // 1. Try primary storage 'bookings'
+    const stored = loadFromStorage<TableBooking[]>('bookings', []);
+    if (stored && stored.length > 0) return stored;
+
+    // 2. Check for backup storage keys
+    try {
+      const backupRaw =
+        localStorage.getItem('tcn_bookings_backup') ||
+        localStorage.getItem('tcn_bookings_archive') ||
+        localStorage.getItem('bookings_backup') ||
+        localStorage.getItem('tcn_bookings') ||
+        localStorage.getItem('bookings');
+      if (backupRaw) {
+        const parsed = JSON.parse(backupRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('[TableContext] Failed to load backup bookings:', e);
+    }
+
+    return INITIAL_BOOKINGS;
+  });
 
   // Global new reservation modal state (accessible via footer CTA anywhere)
   const [isNewBookingModalOpen, setIsNewBookingModalOpen] = useState(false);
@@ -98,8 +118,30 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }),
         dbService.fetchBookings().then((remoteBookings) => {
-          if (remoteBookings) {
-            setBookings(remoteBookings);
+          if (remoteBookings && remoteBookings.length > 0) {
+            setBookings((current) => {
+              // Merge remote bookings with existing local bookings by id so local entries are preserved
+              const map = new Map<string, TableBooking>();
+              current.forEach((b) => map.set(b.id, b));
+              remoteBookings.forEach((b) => map.set(b.id, b));
+              const merged = Array.from(map.values());
+              saveToStorage('bookings', merged);
+              try {
+                localStorage.setItem('tcn_bookings_backup', JSON.stringify(merged));
+              } catch (_) {}
+              return merged;
+            });
+          } else if (remoteBookings && remoteBookings.length === 0) {
+            // Cloud has 0 bookings. DO NOT clear local bookings!
+            // Instead, upload local bookings to cloud so Supabase stays synchronized!
+            setBookings((current) => {
+              if (current && current.length > 0) {
+                current.forEach((b) => {
+                  dbService.syncBooking(b);
+                });
+              }
+              return current;
+            });
           }
         }),
       ]).finally(() => {
@@ -184,7 +226,12 @@ export const TableProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [sessions]);
 
   useEffect(() => {
-    saveToStorage('bookings', bookings);
+    if (bookings && bookings.length > 0) {
+      saveToStorage('bookings', bookings);
+      try {
+        localStorage.setItem('tcn_bookings_backup', JSON.stringify(bookings));
+      } catch (_) {}
+    }
   }, [bookings]);
 
   // Fast hashmap of active table sessions with guaranteed fallback for occupied/paused tables
