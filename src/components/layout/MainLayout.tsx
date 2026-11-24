@@ -49,16 +49,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       </div>
 
       {/* Apple iOS Bottom Navigation Bar for Mobile */}
-      <nav 
+      <nav
         aria-label="Mobile Bottom Navigation"
         className="md:hidden fixed bottom-0 left-0 right-0 h-[56px] pb-[max(env(safe-area-inset-bottom),0px)] bg-[#FFFFFF] border-t border-[#B9BBC6] flex justify-around items-center z-40 select-none shadow-[0px_-2px_8px_rgba(0,0,0,0.06)]"
       >
         <button
           type="button"
           onClick={() => onSelectTab('dashboard')}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${
-            currentTab === 'dashboard' ? 'text-[#FF5900]' : 'text-[#60646C]'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${currentTab === 'dashboard' ? 'text-[#FF5900]' : 'text-[#60646C]'
+            }`}
         >
           <LayoutDashboard className="w-5 h-5" />
           <span className="text-[10px] mt-0.5 font-medium">Floor</span>
@@ -67,9 +66,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <button
           type="button"
           onClick={() => onSelectTab('tables')}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] relative transition-colors ${
-            currentTab === 'tables' ? 'text-[#FF5900]' : 'text-[#60646C]'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] relative transition-colors ${currentTab === 'tables' ? 'text-[#FF5900]' : 'text-[#60646C]'
+            }`}
         >
           <Grid className="w-5 h-5" />
           <span className="text-[10px] mt-0.5 font-medium">Tables</span>
@@ -97,9 +95,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <button
           type="button"
           onClick={() => onSelectTab('cafe')}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${
-            currentTab === 'cafe' ? 'text-[#FF5900]' : 'text-[#60646C]'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${currentTab === 'cafe' ? 'text-[#FF5900]' : 'text-[#60646C]'
+            }`}
         >
           <Coffee className="w-5 h-5" />
           <span className="text-[10px] mt-0.5 font-medium">Café</span>
@@ -108,9 +105,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <button
           type="button"
           onClick={() => onSelectTab('kitchen')}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] relative transition-colors ${
-            currentTab === 'kitchen' ? 'text-[#FF5900]' : 'text-[#60646C]'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] relative transition-colors ${currentTab === 'kitchen' ? 'text-[#FF5900]' : 'text-[#60646C]'
+            }`}
         >
           <ChefHat className="w-5 h-5" />
           <span className="text-[10px] mt-0.5 font-medium">Kitchen</span>
@@ -124,9 +120,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <button
           type="button"
           onClick={() => setIsMobileNavOpen(true)}
-          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${
-            isMobileNavOpen ? 'text-[#FF5900]' : 'text-[#60646C]'
-          }`}
+          className={`flex flex-col items-center justify-center flex-1 h-full min-h-[44px] transition-colors ${isMobileNavOpen ? 'text-[#FF5900]' : 'text-[#60646C]'
+            }`}
         >
           <Menu className="w-5 h-5" />
           <span className="text-[10px] mt-0.5 font-medium">More</span>

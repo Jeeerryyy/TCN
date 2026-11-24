@@ -383,44 +383,40 @@ export const BookingManager: React.FC = () => {
             <button
               type="button"
               onClick={() => setStatusFilter('all')}
-              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
-                statusFilter === 'all'
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${statusFilter === 'all'
                   ? 'bg-[#FFFFFF] text-[#FF5900] shadow-sm'
                   : 'text-[#60646C] hover:text-[#15191E]'
-              }`}
+                }`}
             >
               All ({bookings.length})
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('confirmed')}
-              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
-                statusFilter === 'confirmed'
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${statusFilter === 'confirmed'
                   ? 'bg-[#FFFFFF] text-[#006EF5] shadow-sm'
                   : 'text-[#60646C] hover:text-[#15191E]'
-              }`}
+                }`}
             >
               Confirmed ({confirmedBookings.length})
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('checked-in')}
-              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
-                statusFilter === 'checked-in'
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${statusFilter === 'checked-in'
                   ? 'bg-[#FFFFFF] text-[#0D9926] shadow-sm'
                   : 'text-[#60646C] hover:text-[#15191E]'
-              }`}
+                }`}
             >
               Checked In ({checkedInBookings.length})
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter('cancelled')}
-              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
-                statusFilter === 'cancelled'
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${statusFilter === 'cancelled'
                   ? 'bg-[#FFFFFF] text-[#FF3D00] shadow-sm'
                   : 'text-[#60646C] hover:text-[#15191E]'
-              }`}
+                }`}
             >
               Cancelled ({cancelledBookings.length})
             </button>
@@ -645,7 +641,7 @@ export const BookingManager: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    step={50}
+                    step="any"
                     value={advanceDeposit}
                     onChange={(e) => setAdvanceDeposit(e.target.value)}
                     placeholder="Enter the amount"

@@ -89,7 +89,7 @@ export const TableStudio: React.FC = () => {
       return;
     }
 
-    const rate = parseInt(ratePerHour, 10);
+    const rate = parseFloat(ratePerHour);
     const minMins = parseInt(minMinutes, 10);
     const customPerMin = parseFloat(ratePerMinute);
 
@@ -130,7 +130,7 @@ export const TableStudio: React.FC = () => {
       return;
     }
 
-    const rate = parseInt(ratePerHour, 10);
+    const rate = parseFloat(ratePerHour);
     const minMins = parseInt(minMinutes, 10);
     const customPerMin = parseFloat(ratePerMinute);
 
@@ -465,8 +465,8 @@ export const TableStudio: React.FC = () => {
                   <input
                     type="number"
                     required
-                    min={30}
-                    step={10}
+                    min={0}
+                    step="any"
                     value={ratePerHour}
                     onChange={(e) => {
                       setRatePerHour(e.target.value);
@@ -485,8 +485,8 @@ export const TableStudio: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    step="0.05"
-                    min="0.1"
+                    step="any"
+                    min="0"
                     value={ratePerMinute}
                     onChange={(e) => {
                       setRatePerMinute(e.target.value);
@@ -506,7 +506,7 @@ export const TableStudio: React.FC = () => {
                   <input
                     type="number"
                     min={0}
-                    step={5}
+                    step="any"
                     value={minMinutes}
                     onChange={(e) => setMinMinutes(e.target.value)}
                     placeholder="0 = Exact Time"

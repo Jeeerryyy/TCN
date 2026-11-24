@@ -379,8 +379,8 @@ export const CustomerList: React.FC = () => {
             </div>
             <input
               type="number"
-              min="100"
-              step="100"
+              min="1"
+              step="any"
               required
               value={rechargeAmount}
               onChange={(e) => setRechargeAmount(e.target.value ? Number(e.target.value) : '')}
