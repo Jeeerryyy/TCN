@@ -18,6 +18,7 @@ import {
   Trash2,
   FileSpreadsheet,
   FileText,
+  Search,
 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { useCustomers } from '../../context/CustomerContext';
@@ -45,10 +46,34 @@ export const BookingManager: React.FC = () => {
   const [playersCount, setPlayersCount] = useState('2');
   const [notes, setNotes] = useState('');
 
+  // Table ledger search & filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'checked-in' | 'cancelled'>('all');
+
   const confirmedBookings = bookings.filter((b) => b.status === 'confirmed');
+  const checkedInBookings = bookings.filter((b) => b.status === 'checked-in');
+  const cancelledBookings = bookings.filter((b) => b.status === 'cancelled');
+
   const totalDepositCollected = bookings
     .filter((b) => b.status !== 'cancelled')
     .reduce((sum, b) => sum + b.advanceDeposit, 0);
+
+  // Filtered bookings for the Reservation Book table
+  const filteredBookings = React.useMemo(() => {
+    return bookings.filter((b) => {
+      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const matchName = b.customerName?.toLowerCase().includes(query);
+        const matchPhone = b.customerPhone?.includes(query);
+        const matchTable = b.tableName?.toLowerCase().includes(query);
+        const matchNotes = b.notes?.toLowerCase().includes(query);
+        const matchDate = b.bookingDate?.includes(query);
+        if (!matchName && !matchPhone && !matchTable && !matchNotes && !matchDate) return false;
+      }
+      return true;
+    });
+  }, [bookings, statusFilter, searchQuery]);
 
   const resetForm = () => {
     setCustomerName('');
@@ -163,24 +188,34 @@ export const BookingManager: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Download Entire Excel Button */}
           <button
             type="button"
             onClick={() => exportBookingsToCSV(bookings)}
-            disabled={bookings.length === 0}
-            title={bookings.length > 0 ? 'Download entire bookings ledger in Excel-compatible CSV format' : 'No bookings available to export'}
-            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0 shadow-[0px_1px_3px_rgba(0,0,0,0.06)]"
+            title="Download complete bookings ledger in Excel-compatible CSV format"
+            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-semibold transition-colors border border-[#0D9926]/40 hover:border-[#0D9926] flex items-center gap-2 shrink-0 shadow-sm"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-[#0D9926]" /> Download Entire Excel
+            <FileSpreadsheet className="w-4 h-4 text-[#0D9926]" />
+            <span>Download Excel</span>
+            <span className="text-[10px] bg-[#D1F4D2] text-[#0D9926] font-mono px-1.5 py-0.5 rounded-full font-bold">
+              {bookings.length}
+            </span>
           </button>
+
+          {/* Download Entire PDF Button */}
           <button
             type="button"
             onClick={() => exportBookingsToPDF(bookings)}
-            disabled={bookings.length === 0}
-            title={bookings.length > 0 ? 'Download and print full A4 structured audit report of all bookings' : 'No bookings available to export'}
-            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-50 disabled:cursor-not-allowed active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0 shadow-[0px_1px_3px_rgba(0,0,0,0.06)]"
+            title="Download & print full A4 landscape structured audit report of all bookings"
+            className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#15191E] text-xs font-semibold transition-colors border border-[#FF5900]/40 hover:border-[#FF5900] flex items-center gap-2 shrink-0 shadow-sm"
           >
-            <FileText className="w-3.5 h-3.5 text-[#FF5900]" /> Download Entire PDF
+            <FileText className="w-4 h-4 text-[#FF5900]" />
+            <span>Download PDF</span>
+            <span className="text-[10px] bg-[#FFF4ED] text-[#FF5900] font-mono px-1.5 py-0.5 rounded-full font-bold">
+              {bookings.length}
+            </span>
           </button>
+
           {bookings.length > 0 && (
             <button
               type="button"
@@ -191,18 +226,20 @@ export const BookingManager: React.FC = () => {
                   setTimeout(() => setSuccessMessage(null), 3000);
                 }
               }}
-              className="h-[40px] px-3.5 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#FF3D00] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0"
+              className="h-[40px] px-3 rounded-[8px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#FF3D00] text-xs font-medium transition-colors border border-[#B9BBC6] flex items-center gap-1.5 shrink-0"
+              title="Clear all reservations from ledger"
             >
-              <Trash2 className="w-3.5 h-3.5" /> Clear All Bookings
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
+
           <button
             type="button"
             onClick={() => {
               resetForm();
               setIsAddModalOpen(true);
             }}
-            className="h-[40px] px-4 rounded-[8px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-sm font-normal transition-colors duration-150 border border-[rgba(66,87,138,0.15)] flex items-center gap-2 shrink-0"
+            className="h-[40px] px-4 rounded-[8px] bg-[#FF5900] hover:bg-[#E64E00] active:bg-[#CC4400] text-white text-sm font-medium transition-colors duration-150 border border-[rgba(66,87,138,0.15)] flex items-center gap-2 shrink-0 shadow-sm"
           >
             <Plus className="w-4 h-4" /> New Reservation
           </button>
@@ -256,17 +293,133 @@ export const BookingManager: React.FC = () => {
 
       {/* Bookings Ledger Table */}
       <div className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[8px] overflow-hidden shadow-[0px_2px_8px_rgba(0,0,0,0.08)]">
-        <div className="px-6 py-4 border-b border-[#B9BBC6] flex items-center justify-between">
-          <h3 className="text-sm font-medium text-[#000000]">
-            Reservation Book ({bookings.length})
-          </h3>
-          <span className="text-xs text-[#60646C]">Sorted by schedule</span>
+        {/* Card Header with Quick Export Actions */}
+        <div className="px-4 sm:px-6 py-4 border-b border-[#B9BBC6] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-[#000000] flex items-center gap-2">
+              Reservation Book
+              <span className="text-xs font-mono font-normal text-[#60646C]">
+                ({filteredBookings.length} {filteredBookings.length === 1 ? 'record' : 'records'})
+              </span>
+            </h3>
+            <p className="text-[11px] text-[#60646C] mt-0.5">
+              Live sorted advance customer bookings and advance deposits ledger
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => exportBookingsToCSV(filteredBookings.length > 0 ? filteredBookings : bookings)}
+              title="Download visible bookings in Excel format"
+              className="h-[32px] px-2.5 rounded-[6px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#15191E] border border-[#0D9926]/40 hover:border-[#0D9926] text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#0D9926]" />
+              <span>Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => exportBookingsToPDF(filteredBookings.length > 0 ? filteredBookings : bookings)}
+              title="Print or save PDF report of visible bookings"
+              className="h-[32px] px-2.5 rounded-[6px] bg-[#FFFFFF] hover:bg-[#F3F3F7] active:bg-[#15191E]/[0.08] text-[#15191E] border border-[#FF5900]/40 hover:border-[#FF5900] text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#FF5900]" />
+              <span>PDF</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Ledger Filter & Search Bar */}
+        <div className="px-4 sm:px-6 py-3 bg-[#F8F9FA] border-b border-[#B9BBC6] flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-3.5 h-3.5 text-[#8B8D98] absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by customer, phone, table..."
+              className="w-full pl-8 pr-3 py-1.5 bg-[#FFFFFF] border border-[#B9BBC6] rounded-[6px] text-xs text-[#15191E] outline-none focus:border-[#FF5900] placeholder:text-[#8B8D98]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[#8B8D98] hover:text-[#15191E]"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Status Segmented Tabs */}
+          <div className="inline-flex p-0.5 bg-[#EAEBF0] border border-[#B9BBC6] rounded-[6px] text-xs font-semibold overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
+                statusFilter === 'all'
+                  ? 'bg-[#FFFFFF] text-[#FF5900] shadow-sm'
+                  : 'text-[#60646C] hover:text-[#15191E]'
+              }`}
+            >
+              All ({bookings.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('confirmed')}
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
+                statusFilter === 'confirmed'
+                  ? 'bg-[#FFFFFF] text-[#006EF5] shadow-sm'
+                  : 'text-[#60646C] hover:text-[#15191E]'
+              }`}
+            >
+              Confirmed ({confirmedBookings.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('checked-in')}
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
+                statusFilter === 'checked-in'
+                  ? 'bg-[#FFFFFF] text-[#0D9926] shadow-sm'
+                  : 'text-[#60646C] hover:text-[#15191E]'
+              }`}
+            >
+              Checked In ({checkedInBookings.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('cancelled')}
+              className={`px-2.5 py-1 rounded-[4px] transition-all whitespace-nowrap ${
+                statusFilter === 'cancelled'
+                  ? 'bg-[#FFFFFF] text-[#FF3D00] shadow-sm'
+                  : 'text-[#60646C] hover:text-[#15191E]'
+              }`}
+            >
+              Cancelled ({cancelledBookings.length})
+            </button>
+          </div>
         </div>
 
         {bookings.length === 0 ? (
           <div className="p-12 text-center text-[#8B8D98]">
             <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40 text-[#60646C]" />
             <p className="text-xs font-medium">No advance bookings recorded yet.</p>
+          </div>
+        ) : filteredBookings.length === 0 ? (
+          <div className="p-12 text-center text-[#8B8D98] space-y-2">
+            <Search className="w-8 h-8 mx-auto opacity-40 text-[#60646C]" />
+            <p className="text-xs font-medium text-[#15191E]">No reservations match your search or filter.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('all');
+              }}
+              className="text-xs text-[#006EF5] hover:underline font-semibold"
+            >
+              Clear filters
+            </button>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -283,7 +436,7 @@ export const BookingManager: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#B9BBC6]">
-                {bookings.map((booking) => {
+                {filteredBookings.map((booking) => {
                   return (
                     <tr
                       key={booking.id}
