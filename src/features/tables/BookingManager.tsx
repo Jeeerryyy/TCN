@@ -60,6 +60,13 @@ export const BookingManager: React.FC = () => {
   // Table ledger search & filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'checked-in' | 'cancelled'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  // Reset page on search or status change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   const confirmedBookings = bookings.filter((b) => (b.status || 'confirmed').toLowerCase() === 'confirmed');
   const checkedInBookings = bookings.filter((b) => (b.status || '').toLowerCase() === 'checked-in');
@@ -96,6 +103,12 @@ export const BookingManager: React.FC = () => {
         return dateB.localeCompare(dateA);
       });
   }, [bookings, statusFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
+  const paginatedBookings = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredBookings.slice(start, start + pageSize);
+  }, [filteredBookings, currentPage, pageSize]);
 
   const resetForm = () => {
     setCustomerName('');
@@ -469,7 +482,7 @@ export const BookingManager: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#B9BBC6]">
-                {filteredBookings.map((booking) => {
+                {paginatedBookings.map((booking) => {
                   return (
                     <tr
                       key={booking.id}
@@ -536,6 +549,56 @@ export const BookingManager: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Ledger Pagination Bar */}
+        {filteredBookings.length > 0 && (
+          <div className="px-4 sm:px-6 py-3 border-t border-[#B9BBC6] bg-[#FCFCFD] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="text-[#60646C]">
+              Showing <span className="font-semibold text-[#15191E]">{(currentPage - 1) * pageSize + 1}</span> to{' '}
+              <span className="font-semibold text-[#15191E]">{Math.min(currentPage * pageSize, filteredBookings.length)}</span> of{' '}
+              <span className="font-semibold text-[#15191E]">{filteredBookings.length}</span> total bookings from start to date
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 mr-2">
+                <span className="text-[#60646C]">Page size:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-[#FFFFFF] border border-[#B9BBC6] rounded-[4px] px-2 py-1 text-xs text-[#15191E] outline-none"
+                >
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={500}>All ({filteredBookings.length})</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2.5 py-1 rounded-[4px] border border-[#B9BBC6] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[#15191E] transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-[#60646C] px-1 font-mono">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-2.5 py-1 rounded-[4px] border border-[#B9BBC6] bg-[#FFFFFF] hover:bg-[#F3F3F7] disabled:opacity-40 disabled:cursor-not-allowed font-medium text-[#15191E] transition-colors"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>
